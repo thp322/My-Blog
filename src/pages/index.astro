@@ -1,0 +1,87 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Pagination from '../components/Pagination.astro';
+import ViewCounter from '../components/ViewCounter.astro';
+
+const posts = await getCollection('posts');
+const sorted = posts.sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+
+const perPage = 5;
+const totalPages = Math.ceil(sorted.length / perPage);
+const pagePosts = sorted.slice(0, perPage);
+
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<BaseLayout title="Home" description="Welcome to Harper's personal blog">
+  <section>
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: "Harper's blog",
+      description: "Harper's personal blog",
+      url: Astro.url,
+    })} />
+
+    <!-- Editorial masthead -->
+    <header class="reveal mb-14 md:mb-20">
+      <p class="label-caps text-vermilion mb-4">Vol. I · A Personal Journal of Computing</p>
+      <h1 class="font-display font-semibold text-ink tracking-tight text-5xl md:text-7xl leading-[0.95]">
+        Hi, I’m <span class="italic text-vermilion">Harper</span>.
+      </h1>
+      <div class="mt-6 flex items-start gap-4">
+        <span class="hidden md:block mt-3 h-px w-16 bg-rule-2 shrink-0"></span>
+        <p class="font-newsreader text-lg md:text-xl text-ink-2 leading-relaxed max-w-xl">
+          我是 Harper - 唐海平, 一个游走在代码世界的编程爱好者。我喜欢探索未知的事物，钻研新的技术，探寻未知的技术边界。
+          <a href="#"><span class="block mt-2 text-ink-3 text-sm italic">点我查看Harper的作品集 ~</span></a>
+        </p>
+      </div>
+    </header>
+
+    <!-- Section heading -->
+    <div class="flex items-baseline justify-between border-b border-rule pb-3 mb-8">
+      <h2 class="label-caps text-ink-2 flex items-center gap-3">
+        <span class="text-vermilion">§</span> Latest Dispatches
+      </h2>
+      <span class="label-caps text-ink-4">{sorted.length} entries</span>
+    </div>
+
+    <div class="space-y-10">
+      {pagePosts.map((post, i) => {
+        const { title, date, tags, description } = post.data;
+        const formattedDate = date.toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+
+        return (
+          <article class="card-rule group reveal" style={`animation-delay: ${i * 90}ms`}>
+            <div class="flex items-baseline gap-4 mb-2">
+              <span class="font-display text-vermilion font-semibold text-sm w-7 shrink-0 tabular-nums">{pad(i + 1)}</span>
+              <time class="label-caps text-ink-4">{formattedDate}</time>
+              <span class="text-rule-2">·</span>
+              <ViewCounter slug={post.slug} />
+            </div>
+            <h3 class="font-display font-semibold text-ink text-2xl md:text-3xl tracking-tight mb-2 pl-11">
+              <a href={`/posts/${post.slug}`} class="no-underline bg-gradient-to-r from-vermilion to-vermilion bg-[length:0%_2px] bg-no-repeat bg-left-bottom transition-[background-size] duration-500 group-hover:bg-[length:100%_2px]">
+                {title}
+              </a>
+            </h3>
+            <p class="font-newsreader text-ink-2 leading-relaxed pl-11 mb-3">{description}</p>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 pl-11">
+              {tags.map((tag: string) => (
+                <a href={`/tags/${tag}`} class="font-mono text-xs text-ink-3 hover:text-vermilion transition-colors no-underline">
+                  <span class="text-vermilion">#</span>{tag}
+                </a>
+              ))}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+
+    <Pagination current={1} total={totalPages} />
+  </section>
+</BaseLayout>

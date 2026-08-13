@@ -1,0 +1,75 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts');
+  const tagSet = new Set<string>();
+  for (const post of posts) {
+    for (const tag of post.data.tags) {
+      tagSet.add(tag);
+    }
+  }
+  return [...tagSet].map((tag) => ({
+    params: { tag },
+  }));
+}
+
+const { tag } = Astro.params;
+const posts = await getCollection('posts');
+const filtered = posts
+  .filter((post) => post.data.tags.includes(tag!))
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<BaseLayout title={`标签: #${tag}`} description={`Articles tagged with ${tag}`}>
+  <section class="reveal">
+    <header class="mb-12">
+      <p class="label-caps text-vermilion mb-4">§ Filed Under</p>
+      <h1 class="font-display font-semibold text-ink tracking-tight text-4xl md:text-5xl leading-[1.05] mb-3">
+        <span class="text-vermilion">#</span><span class="italic">{tag}</span>
+      </h1>
+      <p class="font-newsreader text-lg text-ink-3 italic">
+        {filtered.length} {filtered.length === 1 ? 'entry' : 'entries'} in this subject.
+      </p>
+    </header>
+
+    <div class="space-y-10">
+      {filtered.map((post, i) => {
+        const { title, date, tags, description } = post.data;
+        const formattedDate = date.toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+
+        return (
+          <article class="card-rule group">
+            <div class="flex items-baseline gap-4 mb-2">
+              <span class="font-display text-vermilion font-semibold text-sm w-7 shrink-0 tabular-nums">{pad(i + 1)}</span>
+              <time class="label-caps text-ink-4">{formattedDate}</time>
+            </div>
+            <h3 class="font-display font-semibold text-ink text-2xl md:text-3xl tracking-tight mb-2 pl-11">
+              <a href={`/posts/${post.slug}`} class="no-underline bg-gradient-to-r from-vermilion to-vermilion bg-[length:0%_2px] bg-no-repeat bg-left-bottom transition-[background-size] duration-500 group-hover:bg-[length:100%_2px]">
+                {title}
+              </a>
+            </h3>
+            <p class="font-newsreader text-ink-2 leading-relaxed pl-11 mb-3">{description}</p>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 pl-11">
+              {tags.map((t: string) => (
+                <a
+                  href={`/tags/${t}`}
+                  class={`font-mono text-xs no-underline transition-colors ${t === tag ? 'text-vermilion font-medium' : 'text-ink-3 hover:text-vermilion'}`}
+                >
+                  <span class="text-vermilion">#</span>{t}
+                </a>
+              ))}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  </section>
+</BaseLayout>

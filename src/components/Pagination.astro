@@ -1,0 +1,45 @@
+---
+interface Props {
+  current: number;
+  total: number;
+  base?: string;
+}
+
+const { current, total, base = '' } = Astro.props;
+
+function pageUrl(p: number) {
+  if (p === 1) return '/';
+  return `/${base}page/${p}`.replace(/\/+/g, '/');
+}
+---
+
+{total > 1 && (
+  <nav class="flex items-center justify-center gap-1 pt-14">
+    {current > 1 && (
+      <a href={pageUrl(current - 1)} class="group flex items-center gap-2 px-4 py-2 no-underline transition-colors">
+        <span class="text-vermilion transition-transform group-hover:-translate-x-1">←</span>
+        <span class="label-caps text-ink-3 group-hover:text-vermilion transition-colors">Prev</span>
+      </a>
+    )}
+    <span class="mx-2 h-5 w-px bg-rule"></span>
+    {Array.from({ length: total }, (_, i) => i + 1).map((p) => (
+      <a
+        href={pageUrl(p)}
+        class={`font-mono text-sm w-9 h-9 flex items-center justify-center no-underline transition-colors ${
+          p === current
+            ? 'bg-vermilion text-paper font-semibold'
+            : 'text-ink-3 hover:text-vermilion hover:bg-paper-2'
+        }`}
+      >
+        {p}
+      </a>
+    ))}
+    <span class="mx-2 h-5 w-px bg-rule"></span>
+    {current < total && (
+      <a href={pageUrl(current + 1)} class="group flex items-center gap-2 px-4 py-2 no-underline transition-colors">
+        <span class="label-caps text-ink-3 group-hover:text-vermilion transition-colors">Next</span>
+        <span class="text-vermilion transition-transform group-hover:translate-x-1">→</span>
+      </a>
+    )}
+  </nav>
+)}
