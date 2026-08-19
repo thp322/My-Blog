@@ -6,7 +6,9 @@ const posts = await getCollection('posts');
 const postMap = Object.fromEntries(
   posts.map((p) => [p.slug, { title: p.data.title, date: p.data.date, tags: p.data.tags, description: p.data.description }]),
 );
-const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
+// Umami 公开分享链接的 shareId（从分享 URL https://umami.harperlog.cn/share/4gss9Vs0gz5lFjDd 提取）
+// 公开 API 无需认证、无跨域限制，浏览器可直接调用
+const shareId = '4gss9Vs0gz5lFjDd';
 const umamiHost = 'https://umami.harperlog.cn';
 ---
 
@@ -26,7 +28,7 @@ const umamiHost = 'https://umami.harperlog.cn';
   </section>
 </BaseLayout>
 
-<script define:vars={{ postMap, websiteId, umamiHost }}>
+<script define:vars={{ postMap, shareId, umamiHost }}>
   (() => {
     const CACHE_KEY = '__vc_data';
     const TTL = 30 * 60 * 1000;
@@ -84,9 +86,8 @@ const umamiHost = 'https://umami.harperlog.cn';
 
     function fetchAndCache() {
       const now = Date.now();
-      // 使用独立部署的 Umami 域名，调用官方 Metrics API（路径去掉 /views 前缀）
-      // 如果 Umami API 暂未开放匿名访问，失败时返回空数组（不阻塞页面显示，只是浏览量为 0）
-      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+      // 使用 Umami 官方公开分享 API（/api/share/{shareId}），无需认证，已内置 CORS 支持
+      return fetch(`${umamiHost}/api/share/${shareId}/metrics?startAt=0&endAt=${now}&type=url`, {
         headers: { 'Accept': 'application/json' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })

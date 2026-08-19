@@ -1,13 +1,15 @@
 ---
 const { slug } = Astro.props;
-const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
+// Umami 公开分享链接的 shareId（从分享 URL https://umami.harperlog.cn/share/4gss9Vs0gz5lFjDd 提取）
+// 公开 API 无需认证、无跨域限制，浏览器可直接调用
+const shareId = '4gss9Vs0gz5lFjDd';
 const umamiHost = 'https://umami.harperlog.cn';
 ---
 
 <span id={`vc-${slug}`} class="label-caps text-ink-4">
   &mdash;
 </span>
-<script define:vars={{ slug, websiteId, umamiHost }}>
+<script define:vars={{ slug, shareId, umamiHost }}>
   (() => {
     const el = document.getElementById(`vc-${slug}`);
     if (!el) return;
@@ -22,8 +24,8 @@ const umamiHost = 'https://umami.harperlog.cn';
 
     function fetchAndCache() {
       const now = Date.now();
-      // 使用独立部署的 Umami 域名，调用官方 Metrics API（路径去掉 /views 前缀）
-      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+      // 使用 Umami 官方公开分享 API（/api/share/{shareId}），无需认证，已内置 CORS 支持
+      return fetch(`${umamiHost}/api/share/${shareId}/metrics?startAt=0&endAt=${now}&type=url`, {
         headers: { 'Accept': 'application/json' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
