@@ -1,12 +1,13 @@
 ---
 const { slug } = Astro.props;
-const websiteId = 'ceead9d3-35d9-4590-8678-d153328378a6';
+const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
+const umamiHost = 'https://umami.harperlog.cn';
 ---
 
 <span id={`vc-${slug}`} class="label-caps text-ink-4">
   &mdash;
 </span>
-<script define:vars={{ slug, websiteId }}>
+<script define:vars={{ slug, websiteId, umamiHost }}>
   (() => {
     const el = document.getElementById(`vc-${slug}`);
     if (!el) return;
@@ -21,7 +22,10 @@ const websiteId = 'ceead9d3-35d9-4590-8678-d153328378a6';
 
     function fetchAndCache() {
       const now = Date.now();
-      return fetch(`/api/views/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`)
+      // 使用独立部署的 Umami 域名，调用官方 Metrics API（路径去掉 /views 前缀）
+      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+        headers: { 'Accept': 'application/json' }
+      })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
         .then((data) => {
           try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: now })); } catch (e) { /* quota exceeded, ignore */ }

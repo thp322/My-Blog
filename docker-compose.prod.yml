@@ -1,6 +1,6 @@
 # ============================================================
-# 阿里云轻量服务器生产部署：博客 + Watchtower + Nginx 反代 + 自动 HTTPS
-# 域名：harperlog.cn
+# 阿里云轻量服务器生产部署：博客 + Watchtower + Nginx 反代 + 自动 HTTPS + Umami 访问统计
+# 域名：harperlog.cn（博客） / umami.harperlog.cn（统计后台）
 # 服务器公网 IP：47.107.135.232
 #
 # 用法：
@@ -9,15 +9,21 @@
 #
 # 包含的服务：
 #   1. blog              — 博客容器（内部端口 80，不对外暴露）
-#   2. watchtower        — 自动更新博客镜像（v1.7.1 固定版本）
-#   3. nginx-proxy       — 80/443 入口，反代到 blog 容器（v1.6 固定版本）
-#   4. acme-companion    — 自动申请 & 续期 Let's Encrypt 免费 HTTPS 证书（v2.4 固定版本）
+#   2. umami-db          — Umami 统计的 PostgreSQL 数据库（内网）
+#   3. umami             — Umami 自托管访问统计后台（内部端口 3000，域名 umami.harperlog.cn）
+#   4. watchtower        — 自动更新博客镜像（v1.7.1 固定版本）
+#   5. nginx-proxy       — 80/443 入口，反代到 blog/umami（v1.6 固定版本）
+#   6. acme-companion    — 自动申请 & 续期 Let's Encrypt 免费 HTTPS 证书（v2.4 固定版本）
 #
 # 前置条件（必须先做！）：
-#   1. 域名 harperlog.cn 和 www.harperlog.cn 已解析到服务器公网 IP 47.107.135.232
+#   1. 域名 harperlog.cn、www.harperlog.cn、umami.harperlog.cn 已解析到 47.107.135.232
 #   2. 域名已完成 ICP 备案（当前备案号：湘ICP备2025140854号）
 #   3. 阿里云安全组/防火墙已放行 80 和 443 端口入方向
 #   4. Docker 镜像 harper0322/my-blog:latest 已推送到 Docker Hub
+#
+# Umami 默认登录账号：
+#   用户名：admin
+#   密码：umami   （登录后请立刻修改！）
 # ============================================================
 
 services:
@@ -37,6 +43,59 @@ services:
       LETSENCRYPT_EMAIL: 3301108476@qq.com
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - proxy-net
+
+  # ------------------------------------------------------------
+  # Umami 自托管访问统计：数据库（PostgreSQL）
+  # ------------------------------------------------------------
+  umami-db:
+    image: postgres:16-alpine
+    container_name: umami-db
+    restart: unless-stopped
+    # 数据库只在内部网络访问，不对外暴露端口
+    environment:
+      - POSTGRES_DB=umami
+      - POSTGRES_USER=umami
+      - POSTGRES_PASSWORD=Um@mi_DB_2026_Strong_P@ss!
+      - TZ=Asia/Shanghai
+    volumes:
+      # 数据持久化，删容器数据不丢
+      - umami-db-data:/var/lib/postgresql/data
+    networks:
+      - proxy-net
+    healthcheck:
+      # 健康检查：确认数据库能正常连接
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # Umami 自托管访问统计：Web 后台
+  # ------------------------------------------------------------
+  umami:
+    image: umami/umami:postgresql-latest
+    container_name: umami
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      # 连接上面的 PostgreSQL 数据库（用户名/密码/数据库名要和 umami-db 里完全一致）
+      - DATABASE_URL=postgresql://umami:Um@mi_DB_2026_Strong_P@ss!@umami-db:5432/umami
+      - DATABASE_TYPE=postgresql
+      # 随便填一串随机字符，Umami 用来加密 session
+      - HASH_SALT=HarperLog_Umami_Salt_2026_!@#$%^&*
+      - TZ=Asia/Shanghai
+      # ---- nginx-proxy 配置 ----
+      - VIRTUAL_HOST=umami.harperlog.cn
+      - VIRTUAL_PORT=3000
+      # ---- acme-companion HTTPS 证书配置 ----
+      - LETSENCRYPT_HOST=umami.harperlog.cn
+      - LETSENCRYPT_EMAIL=3301108476@qq.com
+    depends_on:
+      umami-db:
+        condition: service_healthy   # 等数据库健康检查通过再启动
     networks:
       - proxy-net
 
@@ -70,6 +129,9 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DEFAULT_HOST=harperlog.cn
+    labels:
+      # 让 acme-companion 能识别到这个 nginx-proxy 容器
+      - "com.github.nginx-proxy.nginx=true"
     networks:
       - proxy-net
 
@@ -86,6 +148,8 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DEFAULT_EMAIL=3301108476@qq.com
+      # 显式指定 nginx-proxy 容器名（v2.4 版本必须，不然找不到）
+      - NGINX_PROXY_CONTAINER=nginx-proxy
     depends_on:
       - nginx-proxy
     networks:
@@ -96,6 +160,7 @@ volumes:
   vhost:
   html:
   acme:
+  umami-db-data:     # Umami 数据库持久化卷
 
 networks:
   proxy-net:
