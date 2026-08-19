@@ -1,6 +1,5 @@
 ---
 const { slug } = Astro.props;
-// Umami Website ID（后台添加网站后生成）
 const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
 const umamiHost = 'https://umami.harperlog.cn';
 ---
@@ -23,14 +22,9 @@ const umamiHost = 'https://umami.harperlog.cn';
 
     function fetchAndCache() {
       const now = Date.now();
-      // 完全照抄 Umami 分享页面匿名请求的 headers：Authorization: Bearer undefined（字符串）
-      // 只要该网站开启了 Share URL，Umami 后端会对这种请求放行 metrics 读取
+      // 使用独立部署的 Umami 域名，调用官方 Metrics API（路径去掉 /views 前缀）
       return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache',
-          'Authorization': 'Bearer undefined'
-        }
+        headers: { 'Accept': 'application/json' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
         .then((data) => {
@@ -56,7 +50,7 @@ const umamiHost = 'https://umami.harperlog.cn';
     }
 
     // One fetch shared by all ViewCounter instances on the page
-    const memKey = '__vc_promise';
+    const memKey = '__vc_p_' + websiteId;
     if (!window[memKey]) {
       window[memKey] = fetchAndCache().catch(() => []);
     }
