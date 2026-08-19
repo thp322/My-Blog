@@ -6,8 +6,8 @@ const posts = await getCollection('posts');
 const postMap = Object.fromEntries(
   posts.map((p) => [p.slug, { title: p.data.title, date: p.data.date, tags: p.data.tags, description: p.data.description }]),
 );
-// Umami 公开分享链接的 shareId（从分享 URL https://umami.harperlog.cn/share/4gss9Vs0gz5lFjDd 提取）
-const shareId = '4gss9Vs0gz5lFjDd';
+// Umami Website ID（后台添加网站后生成）
+const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
 const umamiHost = 'https://umami.harperlog.cn';
 ---
 
@@ -27,12 +27,10 @@ const umamiHost = 'https://umami.harperlog.cn';
   </section>
 </BaseLayout>
 
-<script define:vars={{ postMap, shareId, umamiHost }}>
+<script define:vars={{ postMap, websiteId, umamiHost }}>
   (() => {
-    const DATA_CACHE_KEY = '__vc_data';
-    const TOKEN_CACHE_KEY = '__vc_share_token';
-    const DATA_TTL = 30 * 60 * 1000;
-    const TOKEN_TTL = 55 * 60 * 1000;
+    const CACHE_KEY = '__vc_data';
+    const TTL = 30 * 60 * 1000;
     const container = document.getElementById('popular-list');
     const posts = JSON.parse(JSON.stringify(postMap));
 
@@ -85,50 +83,20 @@ const umamiHost = 'https://umami.harperlog.cn';
         .join('');
     }
 
-    // Umami Share API 两步流程：
-    // ① GET /api/share/{shareId} → 拿 token + websiteId
-    // ② GET /api/websites/{websiteId}/metrics + x-umami-share-token header → 拿 metrics
-    function fetchShareToken() {
-      try {
-        const raw = localStorage.getItem(TOKEN_CACHE_KEY);
-        if (raw) {
-          const cached = JSON.parse(raw);
-          if (cached.token && cached.ts && (Date.now() - cached.ts) < TOKEN_TTL) {
-            return Promise.resolve({ token: cached.token, websiteId: cached.websiteId });
-          }
-        }
-      } catch (e) { /* ignore */ }
-
-      return fetch(`${umamiHost}/api/share/${shareId}`, {
-        headers: { 'Accept': 'application/json' }
-      })
-        .then((r) => { if (!r.ok) throw new Error('share token fetch failed'); return r.json(); })
-        .then((info) => {
-          const token = info.token;
-          const websiteId = info.websiteId;
-          if (!token || !websiteId) throw new Error('invalid share response');
-          try {
-            localStorage.setItem(TOKEN_CACHE_KEY, JSON.stringify({ token, websiteId, ts: Date.now() }));
-          } catch (e) { /* ignore */ }
-          return { token, websiteId };
-        });
-    }
-
     function fetchAndCache() {
       const now = Date.now();
-      return fetchShareToken()
-        .then(({ token, websiteId }) => {
-          return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
-            headers: {
-              'Accept': 'application/json',
-              'Cache-Control': 'no-cache',
-              'Authorization': `Bearer ${token}`
-            }
-          });
-        })
+      // 完全照抄 Umami 分享页面匿名请求的 headers：Authorization: Bearer undefined（字符串）
+      // 只要该网站开启了 Share URL，Umami 后端会对这种请求放行 metrics 读取
+      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Authorization': 'Bearer undefined'
+        }
+      })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
         .then((data) => {
-          try { localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({ data, ts: now })); } catch (e) { /* quota */ }
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: now })); } catch (e) { /* quota */ }
           return data;
         })
         .catch(() => []);
@@ -136,10 +104,10 @@ const umamiHost = 'https://umami.harperlog.cn';
 
     function loadCache() {
       try {
-        const raw = localStorage.getItem(DATA_CACHE_KEY);
+        const raw = localStorage.getItem(CACHE_KEY);
         if (!raw) return null;
         const cached = JSON.parse(raw);
-        if (cached.data && cached.ts && (Date.now() - cached.ts) < DATA_TTL) return cached.data;
+        if (cached.data && cached.ts && (Date.now() - cached.ts) < TTL) return cached.data;
       } catch (e) { /* ignore */ }
       return null;
     }
