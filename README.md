@@ -95,4 +95,4 @@ Umami 自托管于同一 VPS（端口 3001），通过 nginx 代理 `/api/views/
 - 访问量统计（Umami，含本地缓存）
 - SEO（Open Graph / Twitter Card / JSON-LD / Sitemap / og:image）
 - 纯 CSS 移动端汉堡菜单
-- 页脚备案信息
+- 页脚备案信息（湘ICP备2025140854号）

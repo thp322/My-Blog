@@ -2,7 +2,7 @@ services:
   blog:
     build: .
     ports:
-      # 绿联 NAS 部署：映射到宿主机 8080 端口，局域网直接访问
-      # 如需外网访问，在路由器配置端口映射：公网端口 -> NAS_IP:8080
+      # 本地开发/测试：映射到宿主机 8080 端口
+      # 访问地址：http://localhost:8080
       - "8080:80"
     restart: unless-stopped

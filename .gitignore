@@ -12,3 +12,8 @@ Thumbs.db
 .claude/
 PRD.md
 docs/
+
+# IDE
+.idea/
+.vscode/
+*.iml

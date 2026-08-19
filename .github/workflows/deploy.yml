@@ -29,8 +29,8 @@ jobs:
         with:
           context: .
           push: true
-          # 构建多架构：linux/amd64 + linux/arm64
-          # 绿联 DXP4800 是 Intel/AMD CPU，用 amd64；如果是 ARM 型号加 arm64
+          # 构建架构：阿里云轻量服务器是 Intel/AMD CPU (x86_64)，使用 amd64
+          # 如需兼容 ARM 服务器，可添加 linux/arm64
           platforms: linux/amd64
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/my-blog:latest
