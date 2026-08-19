@@ -59,7 +59,8 @@ const umamiHost = 'https://umami.harperlog.cn';
           return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
             headers: {
               'Accept': 'application/json',
-              'x-umami-share-token': token
+              'Cache-Control': 'no-cache',
+              'Authorization': `Bearer ${token}`
             }
           });
         })
