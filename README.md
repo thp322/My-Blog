@@ -1,7 +1,28 @@
-# Harper's Blog
+<h1 align="center">Harper’s Blog</h1>
 
-[![GitHub](https://img.shields.io/badge/GitHub-thp322-181717?logo=github)](https://github.com/thp322)
-[![Blog](https://img.shields.io/badge/Blog-harperlog.cn-00adb5?logo=google-chrome)](https://harperlog.cn)
+<p align="center">
+  <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?style=flat&logo=react&logoColor=white" alt="React 18">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript 5">
+  <a href="https://astro.build"><img src="https://img.shields.io/badge/Astro-5-FF5D01?style=flat&logo=astro" alt="Live Demo"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/thp322"><img src="https://img.shields.io/badge/GitHub-thp322-181717?logo=github" alt="GitHub"></a>
+  <a href="https://harperlog.cn"><img src="https://img.shields.io/badge/Blog-harperlog.cn-00adb5?logo=google-chrome" alt="Portfolio"></a>
+</p>
+
+<p align="center">
+  <a href="https://harperlog.cn/">在线访问</a> |
+  <a href="#技术栈">技术栈</a> |
+  <a href="#项目结构">项目结构</a> |
+  <a href="#本地开发">本地开发</a> |
+  <a href="#添加文章">添加文章</a> |
+  <a href="#技术特性">技术特性</a>
+</p>
+
+<p align="center">
+  <a href="https://harperlog.cn/"><img src="public/images/preview.png" alt="预览图" width="800"></a>
+</p>
 
 基于 [Astro](https://astro.build) 的个人博客，使用 TypeScript + Tailwind CSS v4。
 
@@ -73,15 +94,7 @@ description: 文章摘要
 
 支持 LaTeX 公式（`$...$` / `$$...$$`），代码块自动高亮并带复制按钮。
 
-## Docker 部署
-
-```bash
-docker compose up -d --build    # http://localhost
-```
-
-Umami 自托管于同一 VPS（端口 3001），通过 nginx 代理 `/api/views/` 和 `/umami/`。GitHub Actions 在 push main 时自动部署。
-
-## 特性
+## 技术特性
 
 - **Ink & Vellum / Ink & Midnight 双主题**：编辑风设计系统，暖羊皮纸亮色 + 暖午夜暗色，一键切换并跟随系统偏好
 - Fraunces + Newsreader 衬线字体排版，首字下沉、编辑式章节标号、朱砂印章红点缀
