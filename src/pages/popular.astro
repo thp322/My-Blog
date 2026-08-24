@@ -7,7 +7,7 @@ const postMap = Object.fromEntries(
   posts.map((p) => [p.slug, { title: p.data.title, date: p.data.date, tags: p.data.tags, description: p.data.description }]),
 );
 const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
-const umamiApi = '/api/umami';
+const umamiHost = 'https://umami.harperlog.cn';
 ---
 
 <BaseLayout title="Popular" description="Most viewed articles on Harepr's blog">
@@ -26,7 +26,7 @@ const umamiApi = '/api/umami';
   </section>
 </BaseLayout>
 
-<script define:vars={{ postMap, websiteId, umamiApi }}>
+<script define:vars={{ postMap, websiteId, umamiHost }}>
   (() => {
     const CACHE_KEY = '__vc_data';
     const TTL = 30 * 60 * 1000;
@@ -84,7 +84,7 @@ const umamiApi = '/api/umami';
 
     function fetchAndCache() {
       const now = Date.now();
-      return fetch(`${umamiApi}/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
         headers: { 'Accept': 'application/json' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })

@@ -75,6 +75,8 @@ services:
       # 随便填一串随机字符，Umami 用来加密 session
       - HASH_SALT=HarperLog_Umami_Salt_2026_!@#$%^&*
       - TZ=Asia/Shanghai
+      # CORS 配置：允许 harperlog.cn 跨域访问 Umami API（Popular/ViewCounter 需要）
+      - CORS=harperlog.cn,www.harperlog.cn
       # ---- nginx-proxy 配置 ----
       - VIRTUAL_HOST=umami.harperlog.cn
       - VIRTUAL_PORT=3000
