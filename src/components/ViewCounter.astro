@@ -1,13 +1,12 @@
 ---
 const { slug } = Astro.props;
-const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
-const umamiHost = 'https://umami.harperlog.cn';
+const dataUrl = '/view-counts.json';
 ---
 
 <span id={`vc-${slug}`} class="label-caps text-ink-4">
   &mdash;
 </span>
-<script define:vars={{ slug, websiteId, umamiHost }}>
+<script define:vars={{ slug, dataUrl }}>
   (() => {
     const el = document.getElementById(`vc-${slug}`);
     if (!el) return;
@@ -16,13 +15,16 @@ const umamiHost = 'https://umami.harperlog.cn';
     const TTL = 30 * 60 * 1000; // 30 minutes
 
     function display(entry) {
-      if (!entry || typeof entry.y !== 'number' || entry.y <= 0) { el.remove(); return; }
+      if (!entry || typeof entry.y !== 'number' || entry.y <= 0) {
+        el.textContent = '\u2014';
+        return;
+      }
       el.textContent = entry.y === 1 ? '1 view' : `${entry.y} views`;
     }
 
     function fetchAndCache() {
       const now = Date.now();
-      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+      return fetch(dataUrl, {
         headers: { 'Accept': 'application/json' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
@@ -49,7 +51,7 @@ const umamiHost = 'https://umami.harperlog.cn';
     }
 
     // One fetch shared by all ViewCounter instances on the page
-    const memKey = '__vc_p_' + websiteId;
+    const memKey = '__vc_shared_data';
     if (!window[memKey]) {
       window[memKey] = fetchAndCache().catch(() => []);
     }

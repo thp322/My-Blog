@@ -6,8 +6,7 @@ const posts = await getCollection('posts');
 const postMap = Object.fromEntries(
   posts.map((p) => [p.slug, { title: p.data.title, date: p.data.date, tags: p.data.tags, description: p.data.description }]),
 );
-const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
-const umamiHost = 'https://umami.harperlog.cn';
+const dataUrl = '/view-counts.json';
 ---
 
 <BaseLayout title="Popular" description="Most viewed articles on Harepr's blog">
@@ -26,7 +25,7 @@ const umamiHost = 'https://umami.harperlog.cn';
   </section>
 </BaseLayout>
 
-<script define:vars={{ postMap, websiteId, umamiHost }}>
+<script define:vars={{ postMap, dataUrl }}>
   (() => {
     const CACHE_KEY = '__vc_data';
     const TTL = 30 * 60 * 1000;
@@ -84,7 +83,7 @@ const umamiHost = 'https://umami.harperlog.cn';
 
     function fetchAndCache() {
       const now = Date.now();
-      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+      return fetch(dataUrl, {
         headers: { 'Accept': 'application/json' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })

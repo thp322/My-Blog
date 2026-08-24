@@ -22,6 +22,9 @@ services:
     # 不对外暴露端口，只给 Nginx 反代访问
     expose:
       - "80"
+    # 挂载 view-counts.json，便于不重建镜像即可更新浏览量数据
+    volumes:
+      - ./data/view-counts.json:/usr/share/nginx/html/view-counts.json:ro
     environment:
       # nginx-proxy 配置：告诉反代我这个容器响应哪个域名
       VIRTUAL_HOST: harperlog.cn,www.harperlog.cn
