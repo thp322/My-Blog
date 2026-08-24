@@ -7,7 +7,7 @@ const postMap = Object.fromEntries(
   posts.map((p) => [p.slug, { title: p.data.title, date: p.data.date, tags: p.data.tags, description: p.data.description }]),
 );
 const websiteId = 'cb8a8079-8971-4b42-9ac2-9092ba550af2';
-const umamiHost = 'https://umami.harperlog.cn';
+const umamiApi = '/api/umami';
 ---
 
 <BaseLayout title="Popular" description="Most viewed articles on Harepr's blog">
@@ -26,7 +26,7 @@ const umamiHost = 'https://umami.harperlog.cn';
   </section>
 </BaseLayout>
 
-<script define:vars={{ postMap, websiteId, umamiHost }}>
+<script define:vars={{ postMap, websiteId, umamiApi }}>
   (() => {
     const CACHE_KEY = '__vc_data';
     const TTL = 30 * 60 * 1000;
@@ -84,9 +84,7 @@ const umamiHost = 'https://umami.harperlog.cn';
 
     function fetchAndCache() {
       const now = Date.now();
-      // 使用独立部署的 Umami 域名，调用官方 Metrics API（路径去掉 /views 前缀）
-      // 如果 Umami API 暂未开放匿名访问，失败时返回空数组（不阻塞页面显示，只是浏览量为 0）
-      return fetch(`${umamiHost}/api/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
+      return fetch(`${umamiApi}/websites/${websiteId}/metrics?startAt=0&endAt=${now}&type=url`, {
         headers: { 'Accept': 'application/json' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
