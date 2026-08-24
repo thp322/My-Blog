@@ -28,7 +28,7 @@ const dataUrl = '/view-counts.json';
 <script define:vars={{ postMap, dataUrl }}>
   (() => {
     const CACHE_KEY = '__vc_data';
-    const TTL = 30 * 60 * 1000;
+    const TTL = 5 * 60 * 1000;
     const container = document.getElementById('popular-list');
     const posts = JSON.parse(JSON.stringify(postMap));
 

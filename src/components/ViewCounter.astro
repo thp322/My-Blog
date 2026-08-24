@@ -12,7 +12,7 @@ const dataUrl = '/view-counts.json';
     if (!el) return;
     const pageUrl = `/posts/${slug}`;
     const CACHE_KEY = '__vc_data';
-    const TTL = 30 * 60 * 1000; // 30 minutes
+    const TTL = 5 * 60 * 1000; // 5 minutes
 
     function display(entry) {
       if (!entry || typeof entry.y !== 'number' || entry.y <= 0) {
