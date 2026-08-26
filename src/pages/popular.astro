@@ -28,31 +28,17 @@ const dataUrl = '/view-counts.json';
 <script define:vars={{ postMap, dataUrl }}>
   (() => {
     const CACHE_KEY = '__vc_data';
-    const CACHE_VERSION = 2;
     const TTL = 5 * 60 * 1000;
-    const DEBUG = false;
     const container = document.getElementById('popular-list');
     const posts = JSON.parse(JSON.stringify(postMap));
 
-    function log(...args) {
-      if (DEBUG) console.log('[Popular]', ...args);
-    }
-
     function pad(n) { return String(n).padStart(2, '0'); }
 
-    function isValidData(data) {
-      return Array.isArray(data) && data.every(item => 
-        item && typeof item.x === 'string' && typeof item.y === 'number'
-      );
-    }
-
     function render(data) {
-      log('Rendering with data:', data);
-      
       const list = Object.entries(posts)
         .map(([slug, meta]) => {
-          const entry = isValidData(data) ? data.find((item) => item.x === `/posts/${slug}`) : null;
-          const views = entry && entry.y >= 0 ? entry.y : 0;
+          const entry = data && Array.isArray(data) ? data.find((item) => item.x === `/posts/${slug}`) : null;
+          const views = entry && typeof entry.y === 'number' ? entry.y : 0;
           return { slug, ...meta, views };
         })
         .sort((a, b) => b.views - a.views);
@@ -66,6 +52,7 @@ const dataUrl = '/view-counts.json';
         return;
       }
 
+      // rank glyph: gold laurel for #1, ink for others
       const rank = (i) => {
         if (i === 0) return `<span class="font-display font-semibold text-gold text-xl">1</span>`;
         return `<span class="font-mono text-sm text-ink-4 tabular-nums">${pad(i + 1)}</span>`;
@@ -97,32 +84,14 @@ const dataUrl = '/view-counts.json';
     function fetchAndCache() {
       const now = Date.now();
       return fetch(dataUrl, {
-        headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
+        headers: { 'Accept': 'application/json' }
       })
-        .then((r) => { 
-          log('Fetch response:', r.status, r.statusText);
-          if (!r.ok) throw new Error('bad status: ' + r.status); 
-          return r.json(); 
-        })
+        .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
         .then((data) => {
-          log('Fetched data:', data);
-          if (!isValidData(data)) {
-            log('Warning: invalid data format, using empty array');
-            data = [];
-          }
-          try { 
-            localStorage.setItem(CACHE_KEY, JSON.stringify({ 
-              data, 
-              ts: now,
-              version: CACHE_VERSION 
-            })); 
-          } catch (e) { /* quota */ }
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: now })); } catch (e) { /* quota */ }
           return data;
         })
-        .catch((err) => {
-          log('Fetch failed:', err);
-          return [];
-        });
+        .catch(() => []);
     }
 
     function loadCache() {
@@ -130,46 +99,16 @@ const dataUrl = '/view-counts.json';
         const raw = localStorage.getItem(CACHE_KEY);
         if (!raw) return null;
         const cached = JSON.parse(raw);
-        if (cached.version !== CACHE_VERSION) {
-          log('Cache version mismatch, clearing cache');
-          localStorage.removeItem(CACHE_KEY);
-          return null;
-        }
-        if (cached.data && cached.ts && (Date.now() - cached.ts) < TTL) {
-          log('Using cached data (age:', Math.round((Date.now() - cached.ts) / 1000), 's)');
-          return cached.data;
-        }
-      } catch (e) { 
-        log('Cache load error:', e);
-      }
+        if (cached.data && cached.ts && (Date.now() - cached.ts) < TTL) return cached.data;
+      } catch (e) { /* ignore */ }
       return null;
     }
 
-    // Always fetch fresh data, but use cache as immediate fallback
     const cached = loadCache();
-    if (cached && isValidData(cached)) {
-      log('Rendering from cache first');
-      render(cached);
-    } else {
-      log('No valid cache, showing loading');
-      container.innerHTML = '<p class="font-newsreader text-ink-3 italic">Loading the ledger…</p>';
-    }
+    if (cached) { render(cached); return; }
 
-    // Always fetch fresh data in background
     fetchAndCache()
-      .then((data) => {
-        if (isValidData(data) && data.length > 0) {
-          log('Rendering fresh data');
-          render(data);
-        } else if (!cached) {
-          container.innerHTML = '<p class="font-newsreader text-ink-3 italic">暂无浏览数据。</p>';
-        }
-      })
-      .catch((err) => { 
-        log('Failed to load:', err);
-        if (!cached) {
-          container.innerHTML = '<p class="font-newsreader text-ink-3 italic">加载失败，请稍后重试。</p>';
-        }
-      });
+      .then((data) => render(data))
+      .catch(() => { container.innerHTML = '<p class="font-newsreader text-ink-3 italic">Failed to load the ledger.</p>'; });
   })();
 </script>
