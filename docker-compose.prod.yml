@@ -102,7 +102,7 @@ services:
       - WATCHTOWER_LABEL_ENABLE=true
       - WATCHTOWER_POLL_INTERVAL=300
       - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_DOCKER_API_VERSION=1.43
+      - DOCKER_API_VERSION=1.43
       - TZ=Asia/Shanghai
 
   nginx-proxy:

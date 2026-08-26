@@ -83,11 +83,43 @@ def check_tables() -> list[str]:
 
 
 def query_pageviews() -> list[dict]:
-    """查询页面浏览量数据"""
+    """查询页面浏览量数据（过滤 localhost 访问）"""
     
-    # 查询 1: 尝试 website_event + website_data 结构 (Umami v3)
-    print("尝试查询 website_event + website_data 结构...")
+    # 查询 1: 使用 url_path 列（Umami v3+）
+    print("尝试查询 url_path 列（排除 localhost）...")
     query1 = f"""
+    SELECT url_path as x, COUNT(*) as y 
+    FROM website_event 
+    WHERE website_id = '{WEBSITE_ID}' 
+        AND created_at >= '2024-01-01'
+        AND hostname != 'localhost'
+    GROUP BY url_path 
+    ORDER BY y DESC;
+    """
+    
+    results = run_psql_query(query1)
+    if results:
+        return results
+    
+    # 查询 2: 使用 website_path 列（旧版本）
+    print("尝试查询 website_path 列（排除 localhost）...")
+    query2 = f"""
+    SELECT website_path as x, COUNT(*) as y 
+    FROM website_event 
+    WHERE website_id = '{WEBSITE_ID}' 
+        AND created_at >= '2024-01-01'
+        AND hostname != 'localhost'
+    GROUP BY website_path 
+    ORDER BY y DESC;
+    """
+    
+    results = run_psql_query(query2)
+    if results:
+        return results
+    
+    # 查询 3: 尝试 website_data 表关联查询
+    print("尝试查询 website_data 表结构...")
+    query3 = f"""
     SELECT 
         d.value->>'path' as x,
         COUNT(*) as y
@@ -99,30 +131,13 @@ def query_pageviews() -> list[dict]:
     ORDER BY y DESC;
     """
     
-    results = run_psql_query(query1)
+    results = run_psql_query(query3)
     if results:
         return results
     
-    # 查询 2: 尝试直接从 website_event 获取 path
-    print("尝试查询 website_event 直接获取 path...")
-    query2 = f"""
-    SELECT 
-        e.website_path as x,
-        COUNT(*) as y
-    FROM website_event e
-    WHERE e.website_id = '{WEBSITE_ID}'
-      AND e.created_at >= '2024-01-01'
-    GROUP BY e.website_path
-    ORDER BY y DESC;
-    """
-    
-    results = run_psql_query(query2)
-    if results:
-        return results
-    
-    # 查询 3: 尝试 website_pageview 表 (旧版本 Umami)
+    # 查询 4: 尝试 website_pageview 表 (旧版本 Umami)
     print("尝试查询 website_pageview 表...")
-    query3 = f"""
+    query4 = f"""
     SELECT 
         path as x,
         COUNT(*) as y
@@ -133,11 +148,11 @@ def query_pageviews() -> list[dict]:
     ORDER BY y DESC;
     """
     
-    results = run_psql_query(query3)
+    results = run_psql_query(query4)
     if results:
         return results
     
-    # 查询 4: 列出所有表以帮助调试
+    # 查询 5: 列出所有表以帮助调试
     print("所有尝试均失败。数据库表结构:")
     tables = run_psql_query("SELECT tablename FROM pg_tables WHERE schemaname = 'public';")
     for t in tables:
