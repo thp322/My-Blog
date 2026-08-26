@@ -35,11 +35,11 @@ Blender-MCP 通过模型上下文协议将 Blender 与 Claude Code 连接在一�
 
 进入官方网址下载 .zip 文件并：
 
-![1](/images/blender-mcp/1.png)
+![1](/images/Blender-MCP/1.png)
 
 解压 .zip 文件，打开解压后的文件进入含 addon.py 的文件夹，并且复制文件路径：
 
-![2](/images/blender-mcp/2.png)
+![2](/images/Blender-MCP/2.png)
 
 ### 2.2.UV 包
 
@@ -79,27 +79,27 @@ uv --version
 
 进入 Blender，点击左上角 Edit，依次点击 Preferences  >>  Add-ons 进入如下页面：
 
-![3](/images/blender-mcp/3.png)
+![3](/images/Blender-MCP/3.png)
 
 点击 Install from Disk... 后将前面复制的文件路径粘贴，选择 `addon.py` 
 
-![4](/images/blender-mcp/4.png)
+![4](/images/Blender-MCP/4.png)
 
 点击 Install from Disk
 
 回到主页面，按键盘的 “N” 键，右上键会多一个 BlenderMCP ，点击它:
 
-![5](/images/blender-mcp/5.png)
+![5](/images/Blender-MCP/5.png)
 
 使用默认端口，点击连接即可：
 
-![6](/images/blender-mcp/6.png)
+![6](/images/Blender-MCP/6.png)
 
 ## 4.配置 Claude 桌面客户端
 
 进入 Claude Desktop 设置界面，点击 Developer，点击 Edit Config：
 
-![7](/images/blender-mcp/7.png)
+![7](/images/Blender-MCP/7.png)
 
 找到 `claude_desktop_config.json` 文件，添加 Blender MCP 服务器的相关信息：
 
@@ -131,7 +131,7 @@ claude mcp add blender uvx blender-mcp
 
 再次点击设置界面的 Developer，如果看到以下内容则代表安装成功：
 
-![8](/images/blender-mcp/8.png)
+![8](/images/Blender-MCP/8.png)
 
 ## 5.使用 Claude 制作你的第一个 3D 模型
 
@@ -159,6 +159,6 @@ claude mcp add blender uvx blender-mcp
 
 发送消息后会提示连接 Blender 确认，点击允许即可：
 
-![9](/images/blender-mcp/9.png)
+![9](/images/Blender-MCP/9.png)
 
 Claude 可以创建物体、应用材质、设置照明效果、下载 Poly Haven 的素材，通过 Hyper3D Rodin 生成 3D 模型，甚至可以在 Blender 中执行任意的 Python 代码。
