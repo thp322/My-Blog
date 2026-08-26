@@ -12,7 +12,8 @@ const dataUrl = '/view-counts.json';
     if (!el) return;
     const pageUrl = `/posts/${slug}`;
     const CACHE_KEY = '__vc_data';
-    const TTL = 5 * 60 * 1000; // 5 minutes
+    const CACHE_VERSION = 2;
+    const TTL = 5 * 60 * 1000;
 
     function display(entry) {
       if (!entry || typeof entry.y !== 'number' || entry.y <= 0) {
@@ -25,13 +26,20 @@ const dataUrl = '/view-counts.json';
     function fetchAndCache() {
       const now = Date.now();
       return fetch(dataUrl, {
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
       })
         .then((r) => { if (!r.ok) throw new Error('bad status'); return r.json(); })
         .then((data) => {
-          try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: now })); } catch (e) { /* quota exceeded, ignore */ }
+          try { 
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ 
+              data, 
+              ts: now,
+              version: CACHE_VERSION 
+            })); 
+          } catch (e) { /* quota exceeded, ignore */ }
           return data;
-        });
+        })
+        .catch(() => []);
     }
 
     function loadCache() {
@@ -39,6 +47,10 @@ const dataUrl = '/view-counts.json';
         const raw = localStorage.getItem(CACHE_KEY);
         if (!raw) return null;
         const cached = JSON.parse(raw);
+        if (cached.version !== CACHE_VERSION) {
+          localStorage.removeItem(CACHE_KEY);
+          return null;
+        }
         if (cached.data && cached.ts && (Date.now() - cached.ts) < TTL) return cached.data;
       } catch (e) { /* corrupted, ignore */ }
       return null;
@@ -47,13 +59,12 @@ const dataUrl = '/view-counts.json';
     const cached = loadCache();
     if (cached) {
       display(cached.find((item) => item.x === pageUrl));
-      return;
     }
 
-    // One fetch shared by all ViewCounter instances on the page
-    const memKey = '__vc_shared_data';
+    // Always fetch fresh data
+    const memKey = '__vc_shared_data_v2';
     if (!window[memKey]) {
-      window[memKey] = fetchAndCache().catch(() => []);
+      window[memKey] = fetchAndCache();
     }
 
     window[memKey].then((data) => {
