@@ -88,10 +88,10 @@ class Solution(object):
     def twoSum(self, nums, target):
         hashmap = {}   # key:数组值，value:对应下标
         for i, num in enumerate(nums):
-            diff = target - num
-            if diff in hashmap:
+            need = target - num
+            if need in hashmap:
                 # 找到，返回之前存的下标和当前下标
-                return [hashmap[diff], i]
+                return [hashmap[need], i]
             # 没找到，把当前数存入哈希表
             hashmap[num] = i
         
