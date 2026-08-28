@@ -184,10 +184,9 @@ $$
 
 
 
-## 参考资料
+## 参考资料 / 视频
 
-[1].[FIPS 180-2, Secure Hash Standard (superseded Feb. 25, 2004)](https://csrc.nist.gov/files/pubs/fips/180-2/final/docs/fips180-2.pdf)
+[FIPS 180-2, Secure Hash Standard (superseded Feb. 25, 2004)](https://csrc.nist.gov/files/pubs/fips/180-2/final/docs/fips180-2.pdf)
 
-## 参考视频
+[SHA1算法丨 可厉害的土豆 | 哔哩哔哩](https://www.bilibili.com/video/BV1Ua411679P?vd_source=4a65573450fad180901198fa5cc2d849)
 
-1. [《SHA1算法》丨 可厉害的土豆 | 哔哩哔哩](https://www.bilibili.com/video/BV1Ua411679P?vd_source=4a65573450fad180901198fa5cc2d849)
