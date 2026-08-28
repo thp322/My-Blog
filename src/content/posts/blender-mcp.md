@@ -114,12 +114,10 @@ uv --version
 }
 ```
 
-> [!NOTE]
->
 > **配置文件在哪儿？**
 >
 > - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json` 
-> - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json` 
+>- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json` 
 
 如果你更喜欢使用 Claude Code CLI，那么可以通过一个命令来添加 MCP 服务器：
 
