@@ -11,11 +11,11 @@ description: 介绍爬虫开发中常见的 SHA-1、AES、RSA、MD5、Base64 和
 
 ---
 
-## 一、SHA1 算法<sup>[1]</sup>
+## 一、SHA1 算法
 
 ### SHA 算法起源
 
-SHA (Security Hash Algorithm) 是美国的 NIST 和 NSA 设计的一种标准的 Hash （哈希）算法，SHA 用于数字签名的标准算法的 DSS 中，也是安全性很高的一种 Hash 算法。
+SHA<sup>[1]</sup> (Security Hash Algorithm) 是美国的 NIST 和 NSA 设计的一种标准的 Hash （哈希）算法，SHA 用于数字签名的标准算法的 DSS 中，也是安全性很高的一种 Hash 算法。
 
 是美国国家标准技术研究所发布的国家标准 FIPS PUB 180，最新的标准已经于 2008 年更新到 FIPS PUB 180‑3。其中规定了 SHA‑1，SHA‑224，SHA‑256，SHA‑384，和 SHA‑512 这几种单向散列算法。SHA‑1，SHA‑224 和 SHA‑256 适用于长度不超过 $2^{64}$ 二进制位的消息。SHA‑384 和 SHA‑512 适用于长度不超过 $2^{128}$ 二进制位的消息。
 
@@ -164,11 +164,11 @@ H_4^{(i)} &= e + H_4^{(i-1)}
 $$
 全部分组处理完毕后，拼接$H_0H_1H_2H_3H_4$，得到最终 160bit SHA‑1 摘要。
 
-## 二、AES 加密算法<sup>[2]</sup>
+## 二、AES 加密算法
 
 ### AES 算法起源
 
-AES (Advanced Encryption Standard)，又称 Rijndael 加密法，是美国联邦政府采用的一种区块加密标准。这个标准用来替代原先的 DES，已经被多方分析且广为全世界所使用。
+AES <sup>[2]</sup>(Advanced Encryption Standard)，又称 Rijndael 加密法，是美国联邦政府采用的一种区块加密标准。这个标准用来替代原先的 DES，已经被多方分析且广为全世界所使用。
 
 经过五年的甄选流程，高级加密标准由美国国家标准与技术研究院（NIST）于 2001 年 11 月 26 日发布于 FIPS PUB 197，并在 2002 年 5 月 26 日成为有效的标准。2006 年，高级加密标准已然成为对称密钥加密中最流行的算法之一。
 
