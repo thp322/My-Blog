@@ -11,7 +11,7 @@ description: 介绍爬虫开发中常见的 SHA-1、AES、RSA、MD5、Base64 和
 
 ---
 
-## 一、SHA1 算法<sup>[1]</sup>
+## 一、SHA1 算法
 
 ### SHA 算法起源
 

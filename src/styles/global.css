@@ -127,6 +127,7 @@
 
 /* ===== Base ===== */
 html {
+  scroll-padding-top: 5rem;
   background-color: var(--paper);
   /* subtle warm gradient ambience via layered backgrounds */
   background-image:
