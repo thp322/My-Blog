@@ -11,7 +11,7 @@ description: 介绍爬虫开发中常见的 SHA-1、AES、RSA、MD5、Base64 和
 
 ---
 
-## 一、SHA1 算法
+## 一、SHA1 算法<sup>[1]</sup>
 
 ### SHA 算法起源
 
@@ -164,7 +164,92 @@ H_4^{(i)} &= e + H_4^{(i-1)}
 $$
 全部分组处理完毕后，拼接$H_0H_1H_2H_3H_4$，得到最终 160bit SHA‑1 摘要。
 
-## 二、AES 加密算法
+## 二、AES 加密算法<sup>[2]</sup>
+
+### AES 算法起源
+
+AES (Advanced Encryption Standard)，又称 Rijndael 加密法，是美国联邦政府采用的一种区块加密标准。这个标准用来替代原先的 DES，已经被多方分析且广为全世界所使用。
+
+经过五年的甄选流程，高级加密标准由美国国家标准与技术研究院（NIST）于 2001 年 11 月 26 日发布于 FIPS PUB 197，并在 2002 年 5 月 26 日成为有效的标准。2006 年，高级加密标准已然成为对称密钥加密中最流行的算法之一。
+
+### AES 算法简介
+
+- 输入：AES 属于分组加密算法，**明文长度固定为 128 位**； 密钥长度可以是 128、192、256 位。即128 位明文 +（128/192/256 位）密钥
+- 输出：128 位密文
+
+![5](/images/scraping_encryption/5.png)
+
+### 明文和密文数据转换
+
+128 位（16 字节）的明文 / 密文，需要转换为**4×4 状态矩阵（State）**。
+
+输入的字节顺序：`1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16`
+
+按**列优先**的方式填入 4×4 矩阵，字节按**一列一列向下填充**，先填完第 1 列，再填第 2 列，依次类推。输出密文时，同样按列优先从矩阵还原回 16 字节序列：
+
+![6](/images/scraping_encryption/6.png)
+
+### AES 算法加密过程
+
+#### AES 算法完整全局流程图
+
+完整 AES 加密全过程：
+
+![7](/images/scraping_encryption/7.png)
+
+#### AES 算法完整局部流程图
+
+“初始变换”这一步的数据流向：
+
+![8](/images/scraping_encryption/8.png)
+
+#### 加密第一步：初始置换
+
+将明文和秘钥进行异或操作得到初始变換的结果：
+
+![9](/images/scraping_encryption/9.png)
+
+#### 第二步：九轮循环运算
+
+##### 1.字节代换
+
+将输出的数据通过 s 表进行替换：
+
+![10](/images/scraping_encryption/10.png)
+
+替换完之后：
+
+![11](/images/scraping_encryption/11.png)
+
+##### 2.行位移
+
+![12](/images/scraping_encryption/12.png)
+
+移位之后的结果：
+
+![13](/images/scraping_encryption/13.png)
+
+##### 3.列混合
+
+将输入的 4*4 的矩阵左乘一个给定的 4 \*4 矩阵:
+
+![14](/images/scraping_encryption/14.png)
+
+得到最终相乘的结果：
+
+![15](/images/scraping_encryption/15.png)
+
+
+
+
+
+##### 4.轮秘钥加
+
+
+
+
+
+
 
 
 
@@ -184,9 +269,9 @@ $$
 
 
 
-## 参考资料 / 视频
+## 参考资料
 
-[FIPS 180-2, Secure Hash Standard (superseded Feb. 25, 2004)](https://csrc.nist.gov/files/pubs/fips/180-2/final/docs/fips180-2.pdf)
+[[1].FIPS 180-2, Secure Hash Standard (superseded Feb. 25, 2004)](https://csrc.nist.gov/files/pubs/fips/180-2/final/docs/fips180-2.pdf)
 
-[SHA1算法丨 可厉害的土豆 | 哔哩哔哩](https://www.bilibili.com/video/BV1Ua411679P?vd_source=4a65573450fad180901198fa5cc2d849)
+[[2].Advanced Encryption Standard (AES)](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.197-upd1.pdf)
 
