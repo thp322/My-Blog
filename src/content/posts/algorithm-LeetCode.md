@@ -1,15 +1,15 @@
 ---
-title: 算法每日一题——LeetCode 题01：两数之和 [简单]
+title: LeetCode 300题（持续更新中）
 date: 2026-08-28
 tags: [LeetCode, 算法题解]
-description: 本系列每道题提供 Python / C++ / Java 三种语言的解题代码，欢迎对照练习。本节通过暴力法和哈希表法解题
+description: 本系列为Leetcode力扣 1-300 题讲解合集，每道题提供 Python / C++ / Java 三种语言的解题代码，欢迎对照练习
 ---
 
-## 题目
+## 题目 001：两数之和
 
-[LeetCode 题01：两数之和](https://leetcode.cn/problems/two-sum/description/)
+[1. 两数之和 - 力扣（LeetCode）](https://leetcode.cn/problems/two-sum/description/)
 
-## 题目描述
+### 题目描述
 
 给定一个整数数组 `nums` 和一个整数目标值 `target`，请你在该数组中找出**和为目标值** *`target`* 的那**两个**整数，并返回它们的数组下标。
 
@@ -17,7 +17,7 @@ description: 本系列每道题提供 Python / C++ / Java 三种语言的解题�
 
 你可以按任意顺序返回答案。
 
-## 示例
+### 示例
 
 **示例 1：**
 
@@ -41,14 +41,14 @@ description: 本系列每道题提供 Python / C++ / Java 三种语言的解题�
 输出：[0,1]
 ```
 
-## 提示
+### 提示
 
 - `2 <= nums.length <= 104`
 - `-109 <= nums[i] <= 109`
 - `-109 <= target <= 109`
 - **只会存在一个有效答案**
 
-## 解题思路
+### 解题思路
 
 1. **暴力法**  
    - 以 ` nums`  = [2,7,11,15], ` target`  = 9 为例，选定第一个数 2 ，依次判断与后面的数字相加是否等于`target`  ，再选定第二个数，如上执行。
@@ -67,9 +67,9 @@ description: 本系列每道题提供 Python / C++ / Java 三种语言的解题�
    
    - 当查第一个数 15 时，用 ` target`  减去 15 ，在表里查是否有 ` target`  - 15 这个数值，此时时间复杂度是O(1)，对比遍历的时间复杂度是 O(n)。
 
-## 代码（Python、C++、Java）
+### 代码（Python、C++、Java）
 
-### python - 暴力法
+#### python - 暴力法
 
 ```python
 class Solution(object):
@@ -81,7 +81,7 @@ class Solution(object):
                     return [i, j]
 ```
 
-### python - 哈希表法
+#### python - 哈希表法
 
 ```python
 class Solution(object):
@@ -96,7 +96,7 @@ class Solution(object):
             hashmap[num] = i
 ```
 
-### C++ - 暴力法
+#### C++ - 暴力法
 
 ```c++
 class Solution {
@@ -115,7 +115,7 @@ public:
 };
 ```
 
-### C++ - 哈希表法
+#### C++ - 哈希表法
 
 ```c++
 class Solution {
@@ -137,7 +137,7 @@ public:
 };
 ```
 
-### Java - 暴力法
+#### Java - 暴力法
 
 ```java
 class Solution {
@@ -155,7 +155,7 @@ class Solution {
 }
 ```
 
-### Java - 哈希表法
+#### Java - 哈希表法
 
 ```java
 class Solution {
@@ -173,10 +173,68 @@ class Solution {
 }
 ```
 
-## 总结
+### 总结
 
 | Python             | C++                                   | Java                    |
 | ------------------ | ------------------------------------- | ----------------------- |
 | `need in hashmap`  | `hashmap.find(need) != hashmap.end()` | `map.containsKey(need)` |
 | `hashmap[num]`     | `hashmap[num]`                        | `map.get(num)`          |
 | `hashmap[num] = i` | `hashmap[nums[i]] = i`                | `map.put(num, i)`       |
+
+## 题目 002：两数相加
+
+[2. 两数相加 - 力扣（LeetCode）](https://leetcode.cn/problems/add-two-numbers/description/)
+
+### 题目描述
+
+
+
+### 示例
+
+
+
+### 提示
+
+
+
+### 解题思路
+
+1. **法**  
+   - 
+2. **法**  
+   - 
+
+
+### 代码（Python、C++、Java）
+
+#### python - 
+
+```python
+class Solution(object):
+    def strStr(self, haystack, needle):
+        
+```
+
+#### C++ - 
+
+```c++
+class Solution {
+public:
+    int strStr(string haystack, string needle) {
+        
+    }
+};
+```
+
+#### Java - 
+
+```java
+class Solution {
+    public int strStr(String haystack, String needle) {
+        
+    }
+}
+```
+
+### 总结
+
