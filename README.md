@@ -108,4 +108,4 @@ description: 文章摘要
 - 访问量统计（Umami，含本地缓存）
 - SEO（Open Graph / Twitter Card / JSON-LD / Sitemap / og:image）
 - 纯 CSS 移动端汉堡菜单
-- 页脚备案信息（湘ICP备2025140854号 / 湘公网安备43082102000226号）
+- 页脚备案信息（湘ICP备2025140854号-2 / 湘公网安备43082102000226号）
