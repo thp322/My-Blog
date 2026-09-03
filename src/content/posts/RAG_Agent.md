@@ -1,19 +1,31 @@
 ---
 title: RAG 与 Agent 基础 —— LangChain 开发
 date: 2026-09-02
-tags: [RAG, Agent]
-description: 介绍
+tags: [RAG, Agent，LangChain]
+description: 讲解大模型落地企业场景下 RAG、Agent 核心概念，以及 LangChain 开发实战教程
 ---
 
-在。
+随着大模型技术快速普及，单纯调用大模型接口已经很难满足企业实际业务诉求。企业需要大模型能够读取内部私有文档、输出业务精准答案，还可以自主拆解并执行复杂业务任务。 RAG 与 Agent 就是解决上述痛点的两大核心方案：**RAG 解决知识来源与回答准确性问题，Agent 解决复杂任务自动化执行问题**。而 LangChain 作为主流开发框架，把这两套能力封装成可落地的工程组件，是大模型应用开发的必备工具。
 
 ---
 
 ## 一、RAG 与 Agent
 
-### 1、RAG 与 Agent 介绍
+### 1、大模型的优缺点
 
+#### 优点
 
+- 强大自然语言理解能力：可以读懂人类自然语言，理解复杂语义、上下文，支持各类非结构化文本输入
+- 优秀生成与归纳能力：擅长总结、改写、扩写、文案创作，能够输出通顺、符合人类表达习惯的内容
+- 具备基础推理能力：可以完成简单逻辑推导、问题分析，处理通用场景下的问答任务
+- 通用性强：不需要针对每一个场景从零训练模型，通过提示词就可以适配多种不同业务场景
+
+#### 缺点
+
+- 知识存在时间截止：模型知识冻结在训练完成时刻，无法获取训练之后产生的最新文档、行业动态
+- 存在幻觉问题：直接提问容易出错，会编造不存在的事实、数据，在专业业务场景会带来严重风险
+- 不掌握企业私有数据：企业内部文档、业务流程数据不在训练集，原生大模型无法知晓内部业务信息
+- 只能完成单次问答：原生不具备任务规划能力，面对多步骤复杂任务，无法自动拆解、分步执行
 
 ### 2、企业核心需求（技术人员拿高薪的核心抓手）
 
@@ -28,16 +40,18 @@ description: 介绍
 
 ### 4、RAG 的优势
 
+- RAG 全称检索增强生成（Retrieval‑Augmented Generation），核心思路是**先检索私有资料，再交给大模型来回答**
 - 企业私域数据和大模型结合
 - 让大模型**读得懂**专属数据、输出结果**准确贴合**
 
 ### 5、Agent 的优势
 
-- 企业的需求不是单次提问、回答，而是需要大模型像虚拟员工一样，自动拆解复杂的任务、一步步执行。比如自动整理会议纪要、完成市场调研、处理咨询流程等，这也是大模型从工具升级为生产力的关键
+- 企业的需求不是单次提问、回答，而是需要大模型像虚拟员工一样，自动拆解复杂的任务、一步步执行
+- 比如自动整理会议纪要、完成市场调研、处理咨询流程等，这也是大模型从工具升级为生产力的关键
 
 ### 6、用什么框架开发？
 
-- `LangChain`
+- `LangChain`：目前工业界最主流的开发框架是 **LangChain**，它封装了文档加载、文本切分、向量存储、检索、工具调用、Agent 规划等全套组件，开发者不用从零实现底层逻辑，可以快速搭建 RAG 知识库和 Agent 智能体应用
 
 ## 二、前置准备-大模型的接入
 
@@ -59,7 +73,7 @@ description: 介绍
 
 在编写代码前我们还需要安装 OpenAI 库：
 
-```shell
+```cmd
 pip install openai
 ```
 
@@ -169,13 +183,13 @@ for chunk in completion:
 
 #### Mac  配置环境变量方法
 
-```shell
+```cmd
 open .zshrc
 ```
 
 回车进入，**不要修改原有内容**，在空白处输入：
 
-```shell
+```cmd
 export OPENAI_API_KEY="......"
 export DASHSCOPE_API_KEY="......"
 ```
@@ -204,7 +218,7 @@ export DASHSCOPE_API_KEY="......"
 
 ##### 命令行访问
 
-```shell
+```S
 ollama run deepseek-r1:1.5b
 ```
 
@@ -432,7 +446,7 @@ for chunk in response:
 
 当前的历史消息是一次性的，如果是生产系统可以将消息保存到文件、数据库等持久化工具内，需要的时候提取使用
 
-## 提示词工程
+## 四、提示词工程
 
 提示工程（Prompt Engineering），也称为 In-Context Prompting，是指在**不更新模型权重**的情况下如何与大模型交互以引导其行为以获得所需结果的方法
 
@@ -472,7 +486,7 @@ Few-shot 学习（Few-shot Learning）是指少样本学习，当模型在学习
 
 ![7](/images/RAG_Agent/7.png)
 
-#### 案例
+#### 实战运用 —— 文本分类任务
 
 ```python
 from openai import OpenAI
@@ -548,7 +562,7 @@ python 中使用 Json 主要完成：
 - json.dumps（字典或列表，ensure_ascill=False）：将字典或列表转换成 Json 字符串（ensure_ascill=False 确保中文能正常显示，返回值：Json 字符串）
 - json.loads（json 字符串）：将 Json 字符串转换为 python 字典或列表（返回值：python 字典或python 列表）
 
-**案例**
+#### 案例
 
 python —> json
 
@@ -615,11 +629,150 @@ res_list = json.loads(json_array_str)
 print(res_list, type(res_list))
 ```
 
+#### 实战运用 1 —— 信息抽取任务
 
+```python
+from openai import OpenAI
+import json
 
+client = OpenAI(
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+)
 
+schema = ['日期', '股票名称', '开盘价', '收盘价', '成交量']
+examples_data = [       
+    {
+        "content": "2023-01-10，股市震荡。股票强大科技A股今日开盘价100人民币，一度飙升至105人民币，随后回落至98人民币，最终以102人民币收盘，成交量达到520000。",
+        "answers": {
+            "日期": "2023-01-10",
+            "股票名称": "强大科技A股",
+            "开盘价": "100人民币",
+            "收盘价": "102人民币",
+            "成交量": "520000"
+        }
+    },
+    {
+        "content": "2024-05-16，股市利好。股票英伟达美股今日开盘价105美元，一度飙升至109美元，随后回落至100美元，最终以116美元收盘，成交量达到3560000。",
+        "answers": {
+            "日期": "2024-05-16",
+            "股票名称": "英伟达美股",
+            "开盘价": "105美元",
+            "收盘价": "116美元",
+            "成交量": "3560000"
+        }
+    }
+]
 
+questions = [
+    "2025-06-16，股市利好。股票传智教育A股今日开盘价66人民币，一度飙升至70人民币，随后回落至65人民币，最终以68人民币收盘，成交量达到123000。",
+    "2025-06-06，股市利好。股票黑马程序员A股今日开盘价200人民币，一度飙升至211人民币，随后回落至201人民币，最终以206人民币收盘。"
+]
 
+messages = [
+    {"role": "system", "content": f"你帮我完成信息抽取，我给你句子，你抽取{schema}信息，按JSON字符串输出，如果某些信息不存在，用'原文未提及'表示，请参考如下示例："}
+]
+
+for example in examples_data:
+    messages.append(
+        {"role": "user", "content": example["content"]}
+    )
+    messages.append(
+        {"role": "assistant", "content": json.dumps(example["answers"], ensure_ascii=False)}
+    )
+
+for q in questions:
+    response = client.chat.completions.create(
+        model="qwen3-max",
+        messages=messages + [{"role": "user", "content": f"按照上述的示例，现在抽取这个句子的信息：{q}"}]
+    )
+
+    print(response.choices[0].message.content)
+```
+
+#### 实战运用 2 —— 文本匹配任务
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+)
+
+examples_data = {
+    "是": [
+        ("公司ABC发布了季度财报，显示盈利增长。", "财报披露，公司ABC利润上升。"),
+        ("公司ITCAST发布了年度财报，显示盈利大幅度增长。", "财报披露，公司ITCAST更赚钱了。")
+    ],
+    "不是": [
+        ("黄金价格下跌，投资者抛售。", "外汇市场交易额创下新高。"),
+        ("央行降息，刺激经济增长。", "新能源技术的创新。")
+    ]
+}
+
+questions = [
+    ("利率上升，影响房地产市场。", "高利率对房地产有一定的冲击。"),
+    ("油价大幅度下跌，能源公司面临挑战。", "未来智能城市的建设趋势越加明显。"),
+    ("股票市场今日大涨，投资者乐观。", "持续上涨的市场让投资者感到满意。")
+]
+
+messages = [
+    {"role": "system", "content": f"你帮我完成文本匹配，我给你2个句子，被[]包围，你判断它们是否匹配，回答是或不是，请参考如下示例："},
+]
+
+for key, value in examples_data.items():
+    for t in value:
+        messages.append(
+            {"role": "user", "content": f"句子1：[{t[0]}]，句子2：[{t[1]}]"}
+        )
+        messages.append(
+            {"role": "assistant", "content": key}
+        )
+
+for q in questions:
+    response = client.chat.completions.create(
+        model="qwen3-max",
+        messages=messages + [{"role": "user", "content": f"句子1：[{q[0]}]，句子2：[{q[1]}]"}]
+    )
+
+    print(response.choices[0].message.content)
+```
+
+## 五、RAG 开发
+
+### LangChain 简介
+
+LangChain 由 Harrison Chase 创建于 2022 年 10 月，它是围绕 LLMs （大语言模型）建立的一个框架
+
+![9](/images/RAG_Agent/9.png)
+
+LangChain 自身并不开发 LLMs ，它的核心理念是为各种 LLMs 实现**通用的接口**，把 LLMs 相关的组件“链接”在一起，简化 LLMs 应用的开发难度，方便开发者快速地开发复杂的 LLMs 应用
+
+LangChain 是一个开发 LLM 相关业务功能的集大成者，是一个 python 的第三方库，提供各种功能的 API
+
+LangChain 主要功能
+
+- Prompt 优化提示词（提示词工程）
+- Models 调用各种模型
+- History 管理会话历史记录（记忆）
+- Indexes 管理和分析各类文档
+- Chins 构建功能的执行链条（**核心亮点**）
+- Agent 构建智能体
+
+“All in LangChain”  —— 一站齐活
+
+### LangChain 环境部署
+
+```cmd
+pip install langchain langchain-community langchain-ollama dashscope chromadb
+```
+
+- langchain：核心包
+- langchain-community：社区支持包，提供了更多的第三方模型调用
+- langchain-ollama：ollama 支持包，支持调用 ollama 托管部署的本地模型
+- dashscope：阿里云通义千问的 python SDK
+- chromadb：轻量向量数据库
+
+### RAG 介绍
 
 
 
