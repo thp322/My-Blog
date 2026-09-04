@@ -1130,7 +1130,7 @@ print(model.embed_documents(["我喜欢你", "我稀饭你", "晚上吃啥"]))
 | Ollama 本地模型 | from langchain_ollama <br/>import OllamaLLM            | from langchain_ollama <br/>import ChatOllama                 | from langchain_ollama <br/>import OllamaEmbeddings           |
 |      方法       | invoke 批量 <br/>stream 流式                           | invoke 批量 <br/>stream 流式                                 | embed_query 单次转换 <br/>embed_documents 批量转换           |
 
-### 通用提示词模板
+### PromptTemplate 通用提示词模板
 
 提示词优化在模型应用中非常重要，LangChain 提供了 PromptTemplate 类，用来协助优化提示词
 
@@ -1185,7 +1185,7 @@ res = chain.invoke(input={"lastname": "张", "gender": "女儿"})
 print(res)
 ```
 
-### FewShot 提示词模板
+### FewShotPromptTemplate 提示词模板
 
 ```python
 from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate
@@ -1232,15 +1232,164 @@ print(model.invoke(input=prompt_text))
 
 ### 模板类的 format 和 invoke 方法
 
+在 PromptTemplate（通用提示词模版）、 FewShotPromptTemplate（FewShot 提示词模板）以及 ChatPromptTemplate（对话提示词模板） 都拥有 format 和 invoke 方法
 
+![20](/images/RAG_Agent/20.png)
 
+format 和 invoke 的区别：
 
+| 区别     | format                             | invoke                                                |
+| -------- | ---------------------------------- | ----------------------------------------------------- |
+| 功能     | 纯字符串替换，解析占位符生成提示词 | Runnable 接口标准方法，解析占位符生成提示词           |
+| 返回值   | 字符串                             | PromptValue 类对象                                    |
+| 传参     | .format(k=v, k=v, ······)          | .invoke({"k":v, "k":v, ······})                       |
+| **解析** | 支持解析｛｝占位符                 | 支持解析｛｝占位符和 MessagesPlaceholder 结构化占位符 |
 
+所以前面在查看提示词时用到 `.to_string()`：
 
+```python
+prompt_text = few_shot_template.invoke(input={"input_word": "左"}).to_string()
+```
 
+```python
+from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import FewShotPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.llms.tongyi import Tongyi
+from langchain_community.chat_models.tongyi import ChatTongyi
 
+template = PromptTemplate.from_template("我的邻居是：{lastname}，最喜欢：{hobby}")
 
+res = template.format(lastname="张大明", hobby="钓鱼")
+print(res, type(res))
+"""
+我的邻居是：张大明，最喜欢：钓鱼 
+<class 'str'>
+"""
 
+res2 = template.invoke({"lastname": "周杰轮", "hobby": "唱歌"})
+print(res2, type(res2)
+"""
+text='我的邻居是：周杰轮，最喜欢：唱歌' 
+<class 'langchain_core.prompt_values.StringPromptValue'>
+"""
+```
+
+### ChatPromptTemplate 提示词模板
+
+- PromptTemplate：通用提示词模板，支持动态注入信息
+- FewShotPromptTemplate：支持基于模板注入任意数量的示例信息
+- ChatPromptTemplate：支持注入任意数量的**历史会话**信息
+
+通过 `from_messages` 方法，从列表中获取多轮次会话作为聊天的基础模板。前面 `PromptTemplate` 类用的 `from_template` 仅能接入一条消息，而 `from_messages` 可以接入一个 `list` 的消息
+
+历史会话信息并不是静态的（固定的），而是随着对话的进行不停地积攒，即动态的。所以，历史会话信息需要支持动态注入。
+
+```python
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_community.chat_models.tongyi import ChatTongyi
+
+chat_prompt_template = ChatPromptTemplate.from_messages(
+    [
+        ("system", "你是一个边塞诗人，可以作诗。"),
+        MessagesPlaceholder("history"),
+        ("human", "请再来一首唐诗"),
+    ]
+)
+
+history_data = [
+    ("human", "你来写一个唐诗"),
+    ("ai", "床前明月光，疑是地上霜，举头望明月，低头思故乡"),
+    ("human", "好诗再来一个"),
+    ("ai", "锄禾日当午，汗滴禾下锄，谁知盘中餐，粒粒皆辛苦"),
+]
+
+prompt_text = chat_prompt_template.invoke({"history": history_data}).to_string()
+
+model = ChatTongyi(model="qwen3-max")
+
+res = model.invoke(prompt_text)
+print(res.content, type(res))
+```
+
+### chains 链的基础使用
+
+「 **将组件串联，上一个组件的输出作为下一个组件的输入** 」是 LangChain 链（尤其是 | 管道链）的核心工作原理，这也是链式调用的核心价值：实现数据的自动化流转与组件的协同工作，如下：
+
+```python
+chain = prompt_template | model
+```
+
+核心前提：Runnable 的子类对象才能入链（以及 Callable、Mapping 接口子类对象也可加入（用的不多））。
+
+我们目前所学习到的组件，均是Runnable接口的子类，如下类的继承关系：
+
+![21](/images/RAG_Agent/21.png)
+
+```python
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_community.chat_models.tongyi import ChatTongyi
+
+chat_prompt_template = ChatPromptTemplate.from_messages(
+    [
+        ("system", "你是一个边塞诗人，可以作诗。"),
+        MessagesPlaceholder("history"),
+        ("human", "请再来一首唐诗"),
+    ]
+)
+
+history_data = [
+    ("human", "你来写一个唐诗"),
+    ("ai", "床前明月光，疑是地上霜，举头望明月，低头思故乡"),
+    ("human", "好诗再来一个"),
+    ("ai", "锄禾日当午，汗滴禾下锄，谁知盘中餐，粒粒皆辛苦"),
+]
+
+model = ChatTongyi(model="qwen3-max")
+
+# 组成链，要求每一个组件都是 Runnable 接口的子类
+chain = chat_prompt_template | model
+
+# 通过链去调用 invoke 
+# res = chain.invoke({"history": history_data})
+# print(res.content)
+
+# 通过 stream 流式输出
+for chunk in chain.stream({"history": history_data}):
+    print(chunk.content, end="", flush=True)
+```
+
+![22](/images/RAG_Agent/22.png)
+
+### 拓展：“|” 运算符的重写
+
+前文代码中： `chain = chat_prompt_template | model`，在语法上使用了 | 运算符的重写
+
+在 Python 中，运算符（如 +、|）的行为由类的魔法方法决定。例如：
+
+- a + b 本质调用的是 ：
+
+  ```python
+  a.__or__(b)
+  ```
+
+- a | b 本质调用的是：
+
+  ```python
+  a.__or__(b)
+  ```
+
+只需要自行实现类的 or 方法，即可对 | 符号的功能进行重写
+
+### Runnable 接口
+
+LangChain 中的绝大多数核心组件都继承了 Runnable 抽象基类（位于 langchain_core.runnables.base）
+
+chain 变量是 RunnableSequence（RunnableSerializable 子类）类型，而得到这个类型的原因就是 Runnable 基类内部对 or 魔术方法的改写
+
+同时，在后面继续使用 | 添加新的组件，依旧会得到 RunnableSequence，这就是链的基础架构
+
+![23](/images/RAG_Agent/23.png)
 
 
 
