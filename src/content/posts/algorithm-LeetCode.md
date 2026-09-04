@@ -393,11 +393,17 @@ class Solution(object):
             digit = total % 10           # 当前位数字
             carry = total // 10          # 更新进位 0或1
             
+            # 创建新节点，接到结果链表
+            cur.next = ListNode(digit)
+            cur = cur.next
             
-            
-            
-        
-        
+            # l1 l2往后走，如果不为None
+            if l1:
+                    l1 = l1.next
+                if l2:
+                    l2 = l2.next
+
+            return dummy.next
 ```
 
 #### C++ - 
