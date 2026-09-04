@@ -1391,6 +1391,336 @@ chain 变量是 RunnableSequence（RunnableSerializable 子类）类型，而得
 
 ![23](/images/RAG_Agent/23.png)
 
+### StrOutputParser 解析器
+
+有如下代码，想要以第一次模型的输出结果，第二次去询问模型：
+
+```python
+from langchain_core.prompts import PromptTemplate
+from langchain_community.chat_models.tongyi import ChatTongyi
+
+model = ChatTongyi(model="qwen3-max")
+
+prompt = PromptTemplate.from_template(
+    "我邻居姓：{lastname}, 刚生了{gender}，请起名，仅告知名字无需其它内容"
+)
+
+chain = prompt | model | model
+
+res = chain.invoke({"lastname": "张", "gender": "女儿"})
+print(res.content)
+```
+
+`chain = prompt | model | model`：
+
+- 链的构建完全符合要求（参与的组件）
+
+- 但是运行报错
+
+- 错误的主要原因是：
+
+  • prompt的结果是 PromptValue 类型，输入给了 model
+
+  • model的输出结果是：AIMessage
+
+模型（ChatTongyi）源码中关于 invoke 方法明确指定了 input 的类型：
+
+```python
+@override
+def invoke(
+    self,
+    input: LanguageModelInput,
+    config: RunnableConfig | None = None,
+    *,
+    stop: list[str] | None = None,
+    **kwargs: Any,
+) -> AIMessage:
+```
+
+```python
+LanguageModelInput = PromptValue | str | Sequence[MessageLikeRepresentation]
+"""Input to a language model."""
+```
+
+需要做类型转换
+
+可以借助 LangChain 内置的解析器，StrOutputParser 字符串输出解析器
+
+StrOutputParser 是 LangChain 内置的简单字符串解析器
+
+- 可以将 AIMessage 解析为简单的字符串，符合了模型 invoke 方法要求（可传入字符串，不接收 AIMessage 类型）
+- 是 Runnable 接口的子类（可以加入链）
+
+```python
+parser = StrOutputParser()
+chain = prompt | model | parser | model
+```
+
+修改后的代码如下：
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_community.chat_models.tongyi import ChatTongyi
+
+parser = StrOutputParser()
+model = ChatTongyi(model="qwen3-max")
+prompt = PromptTemplate.from_template(
+    "我邻居姓：{lastname}，刚生了{gender}，请起名，仅告知我名字无需其它内容。"
+)
+
+chain = prompt | model | parser | model 
+
+res: AIMessage = chain.invoke({"lastname": "张", "gender": "女儿"})
+print(res)
+
+# 如果继续在后面加 | parser
+chain = prompt | model | parser | model | parser
+
+res: str = chain.invoke({"lastname": "张", "gender": "女儿"})
+print(res.content)
+```
+
+### JsonOutputParser 与 多模型执行链
+
+在前面我们完成了这样的需求去构建多模型链，不过这种做法并不标准，因为：
+
+上一个模型的输出，没有被处理就输入下一个模型
+
+正常情况下我们应该有如下处理逻辑：
+
+![24](/images/RAG_Agent/24.png)
+
+模型输出的数据类型为 AIMessage，而提示词模版的输入类型为 dict：
+
+```python
+def invoke(    
+    self, input: dict, config: RunnableConfig | None = None, **kwargs: Any
+) -> PromptValue:
+```
+
+所以，我们需要完成将模型输出的 AIMessage 转为字典注入第二个提示词模板中，形成新的提示词（PromptValue 对象）
+
+- StrOutputParser：AIMessage 输入、str 输出
+- JsonOutputParser：AIMessage 输入、dict 输出
+
+#### JsonOutputParser 完成多模型链
+
+```python
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain_community.chat_models.tongyi import ChatTongyi
+from langchain_core.prompts import PromptTemplate
+
+# 创建所需的解析器
+str_parser = StrOutputParser()
+json_parser = JsonOutputParser()
+
+# 模型创建
+model = ChatTongyi(model="qwen3-max")
+
+# 第一个提示词模板
+first_prompt = PromptTemplate.from_template(
+    "我邻居姓：{lastname}，刚生了{gender}，请帮忙起名字，"
+    "并封装为JSON格式返回给我。要求key是name，value就是你起的名字，请严格遵守格式要求。"
+)
+
+# 第二个提示词模板
+second_prompt = PromptTemplate.from_template(
+    "姓名：{name}，请帮我解析含义。"
+)
+
+# 构建链（AIMessage("{name: 张若曦}")
+chain = first_prompt | model | json_parser | second_prompt | model | str_parser
+
+for chunk in chain.stream({"lastname": "张", "gender": "女儿"}):
+    print(chunk, end="", flush=True)
+```
+
+### RunnableLambda 与 自定义函数加入链
+
+前文我们根据 JsonOutputParser 完成了多模型执行链条的构建
+
+我们还可以自己编写 Lambda 匿名函数来完成自定义逻辑的数据转换，想怎么转换就怎么转换，更自由
+
+想要完成这个功能，可以基于RunnableLambda类实现
+
+RunnableLambda 类是 LangChain 内置的，将普通函数等转换为 Runnable 接口实例，方便自定义函数加入 chain
+
+语法：
+
+```python
+RunnableLambda( 函数对象 或 lambda 匿名函数 )
+```
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_community.chat_models.tongyi import ChatTongyi
+from langchain_core.runnables import RunnableLambda
+
+model = ChatTongyi(model="qwen3-max")
+str_parser = StrOutputParser()
+
+first_prompt = PromptTemplate.from_template(
+    "我邻居姓：{lastname}，刚生了{gender}，请帮忙起名字，仅生成一个名字，并告知我名字，不要额外信息。"
+)
+
+second_prompt = PromptTemplate.from_template(
+    "姓名{name}，请帮我解析含义。"
+)
+
+# 函数的入参：AIMessage -> dict  ({"name": "xxx"})
+my_func = RunnableLambda(lambda ai_msg: {"name": ai_msg.content})
+
+chain = first_prompt | model | my_func | second_prompt | model | str_parser
+
+for chunk in chain.stream({"lastname": "曹", "gender": "女孩"}):
+    print(chunk, end="", flush=True)
+```
+
+其中 `my_func` 接受来自 `model` 的输出（AIMessage），返回 `{"name": 模型输出的结果 }` 
+
+跳过 RunnableLambda 类，直接让函数加入链也是可以的。因为 Runnable 接口类在实现 or 的时候，支持 Callable 接口的实例（函数就是 Callable 接口的实例）：
+
+```python
+def __or__(
+    self,
+    other: Runnable[Any, Other]
+    | Callable[[Iterator[Any]], Iterator[Other]]
+    | Callable[[AsyncIterator[Any]], AsyncIterator[Other]]
+    | Callable[[Any], Other]
+    | Mapping[str, Runnable[Any, Other] | Callable[[Any], Other] | Any],
+) -> RunnableSerializable[Input, Other]:
+```
+
+如上代码示例，| 符号（底层是调用 or）组链，是支持函数加入的。其本质是将函数**自动转换为 RunnableLambda**
+
+```python
+ chain = first_prompt | model | (lambda ai_msg: {"name": ai_msg.content}) | second_prompt | model | str_parser
+```
+
+### Memory 临时会话记忆
+
+如果想要封装历史记录，除了自行维护历史消息外，也可以借助 LangChain 内置的历史记录附加功能
+
+LangChain提供了History功能，帮助模型在有历史记忆的情况下回答
+
+- 基于 RunnableWithMessageHistory 在原有链的基础上创建带有历史记录功能的新链（新 Runnable 实例）
+- 基于 InMemoryChatMessageHistory 为历史记录提供内存存储（临时用）
+
+```python
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
+# 通过 RunnableWithMessageHistory 获取一个新的带有历史记录功能的 chain ( conversation_chain )
+conversation_chain = RunnableWithMessageHistory(
+    some_chain,                           # 被附加历史消息的 Runnable，通常是 chain
+    None,                                 # 获取指定会话 ID 的历史会话的函数
+    input_messages_key="input",           # 声明用户输入消息在模板中的占位符
+    history_messages_key="chat_history"   # 声明历史消息在模板中的占位符
+)
+```
+
+其中 `None` 中提供 ID，返回历史会话记录，其中历史会话记录封装在 InMemoryChatMessageHistory 中
+
+```python
+# 获取指定会话 ID 的历史会话记录函数
+chat_history_store = {}            # 存放多个会话 ID 所对应的历史会话记录
+# 函数传入为会话 ID（字符串类型）
+# 函数要求返回 BaseChatMessageHistory 的子类
+# BaseChatMessageHistory 类专用于存放某个会话的历史记录
+# InMemoryChatMessageHistory 是官方自带的基于内存存放历史记录的类
+def get_history(session_id):
+    if session_id not in chat_history_store:
+        # 返回一个新的实例
+        chat_history_store[session_id] = InMemoryChatMessageHistory()
+        return chat_history_store[session_id]
+```
+
+完整代码
+
+```python
+from langchain_community.chat_models.tongyi import ChatTongyi
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.chat_history import InMemoryChatMessageHistory
+
+model = ChatTongyi(model="qwen3-max")
+str_parser = StrOutputParser()
+prompt = PromptTemplate.from_template(
+    "你需要根据会话历史回应用户问题。对话历史：{chat_history}，用户提问：{input}，请回答"
+)
+"""
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "你需要根据会话历史回应用户问题。对话历史："),
+        MessagesPlaceholder("chat_history"),
+        ("human", "请回答如下问题：{input}")
+    ]
+)
+"""
+
+def print_prompt(full_prompt):
+    print("="*20, full_prompt.to_string(), "="*20)
+    return full_prompt
+
+base_chain = prompt | print_prompt | model | str_parser
+
+store = {}      # key 就是 session，value 就是 InMemoryChatMessageHistory 类对象
+# 实现通过会话 id 获取 InMemoryChatMessageHistory 类对象
+def get_history(session_id):
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+
+    return store[session_id]
+
+# 创建一个新的链，对原有链增强功能：自动附加历史消息
+conversation_chain = RunnableWithMessageHistory(
+    base_chain,     				    # 被增强的原有 chain
+    get_history,    				    # 通过会话 id 获取 InMemoryChatMessageHistory 类对象
+    input_messages_key="input",         # 表示用户输入在模板中的占位符
+    history_messages_key="chat_history" # 表示用户输入在模板中的占位符
+)
+
+
+if __name__ == '__main__':
+    # 固定格式，添加 LangChain 的配置，为当前程序配置所属的 session_id
+    session_config = {
+        "configurable": {
+            "session_id": "user_001"
+        }
+    }
+
+    res = conversation_chain.invoke({"input": "小明有2个猫"}, session_config)
+    print("第1次执行：", res)
+
+    res = conversation_chain.invoke({"input": "小刚有1只狗"}, session_config)
+    print("第2次执行：", res)
+
+    res = conversation_chain.invoke({"input": "总共有几个宠物"}, session_config)
+    print("第3次执行：", res)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
