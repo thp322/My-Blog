@@ -1,7 +1,7 @@
 ---
 title: RAG 与 Agent 基础 —— LangChain 开发
 date: 2026-09-02
-tags: [RAG, Agent，LangChain]
+tags: [RAG, Agent, LangChain]
 description: 讲解大模型落地企业场景下 RAG、Agent 核心概念，以及 LangChain 开发实战教程
 ---
 
