@@ -70,9 +70,9 @@ description: 本系列为 Leetcode 力扣热题 100 题讲解合集，每道题�
    
    - 当查第一个数 15 时，用 ` target`  减去 15 ，在表里查是否有 ` target`  - 15 这个数值，此时时间复杂度是O(1)，对比遍历的时间复杂度是 O(n)。
 
-### 代码
+### 代码（Python）
 
-#### python - 暴力法
+#### 暴力法
 
 ```python
 class Solution(object):
@@ -84,7 +84,7 @@ class Solution(object):
                     return [i, j]
 ```
 
-#### python - 哈希表法
+#### 哈希表法
 
 ```python
 class Solution(object):
@@ -99,7 +99,7 @@ class Solution(object):
             hashmap[num] = i
 ```
 
-#### 
+
 
 
 
@@ -169,7 +169,7 @@ class Solution(object):
 
 ### 代码（Python）
 
-#### python - 字典排序法
+#### 字典排序法
 
 ```python
 class Solution(object):
@@ -186,7 +186,7 @@ class Solution(object):
         return result.values()
 ```
 
-#### python - 计数哈希法
+#### 计数哈希法
 
 ```python
 class Solution(object):
@@ -205,7 +205,7 @@ class Solution(object):
         return list(result.values())
 ```
 
-#### 
+
 
 
 
@@ -254,18 +254,102 @@ class Solution(object):
 
 ### 解题思路
 
-1. **法**  
-   - 
-2. **法**  
-   - 
+- `x in num_set`：判断存在，**平均 O (1)**，一瞬间完成（set 集合的特性：集合底层是哈希表）
+
+- 把全部数字存入**集合 set**，O (1) 时间判断某个数字是否存在
+- 不能直接逐个数字往后遍历（会大量重复计算，变成 O (n²)）
+- 只从序列的起点开始算
+  - 如果 `x‑1` 不在集合中，说明 `x` 是一段连续序列的开头
+  - 然后不断看 `x+1、x+2…` 是否存在，统计这段连续序列长度
+  - 如果 `x‑1` 在集合，说明 x 不是起点，直接跳过，不计算
+- 更新全局最大长度
+
+> 关键点：每个数字只会被访问一次，整体时间复杂度 O (n)
 
 
 ### 代码（Python）
 
-#### python - 
+```python
+class Solution(object):
+    def longestConsecutive(self, nums):
+        max_len = 0
+        num_set = set(nums)
+        for x in num_set:
+            # x-1 不在集合，x 是序列的起点
+            if x - 1 not in num_set:
+                cur_num = x
+                cur_len = 1 
+                # 不断往后找连续数字
+                while cur_num + 1 in num_set:
+                    cur_num += 1
+                    cur_len +=1
+                max_len = max(max_len, cur_len)
+		return max_len
+```
+
+
+
+
+
+
+
+## 题目 004：移动零 [ 简单 ]
+
+[283. 移动零 - 力扣（LeetCode）](https://leetcode.cn/problems/move-zeroes/description/?envType=study-plan-v2&envId=top-100-liked)
+
+#双指针
+
+### 题目描述
+
+给定一个数组 `nums`，编写一个函数将所有 `0` 移动到数组的末尾，同时保持非零元素的相对顺序。
+
+**请注意** ，必须在不复制数组的情况下原地对数组进行操作。
+
+### 示例
+
+**示例 1:**
+
+```
+输入: nums = [0,1,0,3,12]
+输出: [1,3,12,0,0]
+```
+
+**示例 2:**
+
+```
+输入: nums = [0]
+输出: [0]
+```
+
+### 提示
+
+- `1 <= nums.length <= 104`
+- `-231 <= nums[i] <= 231 - 1`
+
+### 解题思路
+
+**快慢指针法**  
+
+- 左指针与右指针同时指向第一位数
+- **左指针 left**：指向应该放置非零数的位置
+- **右指针 right**：遍历数组，寻找非零元素
+- right 不断向后遍历；遇到非 0 数字，把这个数放到 left 位置；left 右移，right 继续向后遍历
+
+
+### 代码（Python）
 
 ```python
-
+class Solution(object):
+    def moveZeroes(self, nums):
+        left = 0
+        # right 遍历找非零，放到 left 位置
+        for right in range(len(nums)):
+            if nums[right] != 0:
+                nums[ledt] = num[right]
+                left += 1
+        # left之后全部置0
+        for i in range(left, len(nums)):
+            nums[i] = 0
 ```
 
 
@@ -326,9 +410,9 @@ class Solution(object):
 
 ![11](/images/algorithm-LeetCode/11.png)
 
-### 代码
+### 代码（Python）
 
-#### python - **双指针-滑动窗口法**  
+#### **双指针-滑动窗口法**  
 
 ```python
 class Solution(object):
@@ -585,9 +669,9 @@ def fun(n):
 |  L1  |  7   |  8   |   9   | **1** |
 |  L2  |  3   |  4   | **0** | **0** |
 
-### 代码
+### 代码（Python）
 
-#### python - 迭代法
+#### 迭代法
 
 ```python
 class ListNode(object):
@@ -624,7 +708,7 @@ class Solution(object):
 
 `result` 始终指向 0，而 `cur` 会随着 `while` 不断向后移动，而我们的答案从 `0` 后面开始添加，所以我们需要返回 `result.next`
 
-#### python - 递归法
+#### 递归法
 
 ```python
 class ListNode(object):
@@ -751,9 +835,9 @@ class Solution(object):
 
    - 即左上角的数小于等于右下角的数，左下角的数小于等于右上角的数。那么只要不符合交叉小于等于，我们就需要调整分割线位置
 
-### 代码
+### 代码（Python）
 
-#### python - 
+#### 
 
 ```python
 class Solution(object):
@@ -770,6 +854,8 @@ class Solution(object):
 ## 题目 0： [  ]
 
 
+
+#
 
 ### 题目描述
 
@@ -793,7 +879,7 @@ class Solution(object):
 
 ### 代码（Python）
 
-#### python - 
+#### 
 
 ```python
 
