@@ -1651,6 +1651,7 @@ prompt = PromptTemplate.from_template(
     "你需要根据会话历史回应用户问题。对话历史：{chat_history}，用户提问：{input}，请回答"
 )
 """
+# 优化：
 prompt = ChatPromptTemplate.from_messages(
     [
         ("system", "你需要根据会话历史回应用户问题。对话历史："),
@@ -1679,9 +1680,8 @@ conversation_chain = RunnableWithMessageHistory(
     base_chain,     				    # 被增强的原有 chain
     get_history,    				    # 通过会话 id 获取 InMemoryChatMessageHistory 类对象
     input_messages_key="input",         # 表示用户输入在模板中的占位符
-    history_messages_key="chat_history" # 表示用户输入在模板中的占位符
+    history_messages_key="chat_history" # 表示历史消息在模板中的占位符
 )
-
 
 if __name__ == '__main__':
     # 固定格式，添加 LangChain 的配置，为当前程序配置所属的 session_id
@@ -1693,49 +1693,1124 @@ if __name__ == '__main__':
 
     res = conversation_chain.invoke({"input": "小明有2个猫"}, session_config)
     print("第1次执行：", res)
-
     res = conversation_chain.invoke({"input": "小刚有1只狗"}, session_config)
     print("第2次执行：", res)
-
     res = conversation_chain.invoke({"input": "总共有几个宠物"}, session_config)
     print("第3次执行：", res)
 ```
 
+### Memory 长期会话记忆
 
+使用 InMemoryChatMessageHistory 仅可以在内存中临时存储会话记忆，一旦程序退出，则记忆丢失
 
+InMemoryChatMessageHistory 类继承自 BaseChatMessageHistory，在官方注释中给出了相关实现的指南，并给出了基于文件的历史消息存储示例代码：
 
+![25](/images/RAG_Agent/25.png)
 
+我们可以自行实现一个基于 Json 格式和本地文件的会话数据保存
 
+FileChatMessageHistory 类实现，核心思路：
 
+- 基于文件存储会话记录，以 session_id 为文件名，不同 session_id 有不同文件存储消息
 
+- 继承 BaseChatMessageHistory 实现如下3个方法：
 
+  •  add_messages：同步模式，添加消息
 
+  •  messages：同步模式，获取消息
 
+  •  clear：同步模式，清除消息
 
+如下面代码，官方在 BaseChatMessageHistory 类的注释中提供了一个基于文件存储的示例代码：
 
+![26](/images/RAG_Agent/26.png)
 
+```python
+from __future__ import annotations
 
+import os, json
+from typing import Sequence
 
+from langchain_community.chat_models import ChatTongyi
+from langchain_core.messages import message_to_dict, messages_from_dict, BaseMessage
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnableWithMessageHistory
 
+# message_to_dict：单个消息对象（BaseMessage 类实例） -> 字典
+# messages_from_dict：[字典、字典...]  -> [消息、消息...]
+# AIMessage、HumanMessage、SystemMessage 都是 BaseMessage 的子类
 
+class FileChatMessageHistory(BaseChatMessageHistory):
+    def __init__(self, session_id, storage_path):
+        self.session_id = session_id        # 会话 id
+        self.storage_path = storage_path    # 不同会话 id 的存储文件，所在的文件夹路径
+        # 完整的文件路径
+        self.file_path = os.path.join(self.storage_path, self.session_id)
+        # 确保文件夹是存在的
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
 
+    def add_messages(self, messages: Sequence[BaseMessage]) -> None:
+        # Sequence序列 类似list、tuple
+        all_messages = list(self.messages)      # 已有的消息列表
+        all_messages.extend(messages)           # 新的和已有的融合成一个 list
 
+        # 将数据同步写入到本地文件中
+        # 类对象写入文件 -> 一堆二进制
+        # 为了方便，可以将 BaseMessage 消息转为字典（借助 json 模块以 json 字符串写入文件）
+        # 官方 message_to_dict：单个消息对象（BaseMessage 类实例） -> 字典
+        # new_messages = []
+        # for message in all_messages:
+        #     d = message_to_dict(message)
+        #     new_messages.append(d)
 
+        new_messages = [message_to_dict(message) for message in all_messages]
+        # 将数据写入文件
+        with open(self.file_path, "w", encoding="utf-8") as f:
+            json.dump(new_messages, f)
 
+    @property       # @property 装饰器将 messages 方法变成成员属性用
+    def messages(self) -> list[BaseMessage]:
+        # 当前文件内： list[字典]
+        try:
+            with open(self.file_path, "r", encoding="utf-8") as f:
+                messages_data = json.load(f)    # 返回值就是：list[字典]
+                return messages_from_dict(messages_data)
+        except FileNotFoundError:
+            return []
 
+    def clear(self) -> None:
+        with open(self.file_path, "w", encoding="utf-8") as f:
+            json.dump([], f)
 
+model = ChatTongyi(model="qwen3-max")
+# prompt = PromptTemplate.from_template(
+#     "你需要根据会话历史回应用户问题。对话历史：{chat_history}，用户提问：{input}，请回答"
+# )
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "你需要根据会话历史回应用户问题。对话历史："),
+        MessagesPlaceholder("chat_history"),
+        ("human", "请回答如下问题：{input}")
+    ]
+)
 
+str_parser = StrOutputParser()
 
+def print_prompt(full_prompt):
+    print("="*20, full_prompt.to_string(), "="*20)
+    return full_prompt
 
+base_chain = prompt | print_prompt | model | str_parser
 
+def get_history(session_id):
+    return FileChatMessageHistory(session_id, "./chat_history")
 
+# 创建一个新的链，对原有链增强功能：自动附加历史消息
+conversation_chain = RunnableWithMessageHistory(
+    base_chain,     # 被增强的原有chain
+    get_history,    # 通过会话id获取InMemoryChatMessageHistory类对象
+    input_messages_key="input",             # 表示用户输入在模板中的占位符
+    history_messages_key="chat_history"     # 表示用户输入在模板中的占位符
+)
 
+if __name__ == '__main__':
+    # 固定格式，添加 LangChain 的配置，为当前程序配置所属的 session_id
+    session_config = {
+        "configurable": {
+            "session_id": "user_001"
+        }
+    }
 
+    res = conversation_chain.invoke({"input": "小明有2个猫"}, session_config)
+    print("第1次执行：", res)
+    res = conversation_chain.invoke({"input": "小刚有1只狗"}, session_config)
+    print("第2次执行：", res)
+    res = conversation_chain.invoke({"input": "总共有几个宠物"}, session_config)
+    print("第3次执行：", res)
+```
 
+### Document loaders 文档加载器
 
+文档加载器提供了一套标准接口，用于将不同来源（如 CSV、PDF 或 JSON等）的数据读取为 LangChain 的文档格式。这确保了无论数据来源如何，都能对其进行一致性处理
 
+文档加载器（内置或自行实现）需实现 BaseLoader 接口
 
+**Class Document**，是 LangChain 内文档的统一载体，所有文档加载器最终返回此类的实例
 
+一个基础的 Document 类实例，基于如下代码创建：
+
+```python
+from langchain_core.documents import Document
+
+document = Document(
+    page_content="Hello, world!", metadata={"source": "https://example.com"}
+)
+```
+
+可以看到，Document 类其核心记录了：
+
+- page_content：文档内容
+- metadata：文档元数据（字典）
+
+不同的文档加载器可能定义了不同的参数，但是其都实现了统一的接口（方法）
+
+- load()：一次性加载全部文档
+- lazy_load()：延迟流式传输文档，对大型数据集很有用，避免内存溢出
+
+一个简单的 CSVLoader 的使用示例如下：
+
+```python
+from langchain_community.document_loaders.csv_loader import CSVLoader
+loader = CSVLoader(
+	......         # 初始化参数
+)
+
+# 一次性加载全部文档
+documents = loader.load()
+
+# 对于大数据集，分段返回文档
+for document in loader.lazy_load():
+	print(document)
+```
+
+LangChain 内置了许多文档加载器，详细参见官方文档：
+
+https://docs.langchain.com/oss/python/integrations/document_loaders
+
+我们简单的学习如下几个常用的文档加载器：
+
+- CSVLoader
+- JSONLoader
+- PDFLoader
+
+### CSVLoader
+
+#### 简单示例：
+
+```python
+from langchain_community.document_loaders.csv_loader import CSVLoader
+
+loader = CSVLoader(file_path="./xxx.csv")
+
+data = loader.load()
+print(data)
+```
+
+#### 自定义 CSV 文件的解析和加载：
+
+```python
+from langchain_community.document_loaders.csv_loader import CSVLoader
+
+loader = CSVLoader(
+    file_path=“./xxx.csv”,
+    csv_args={
+        “delimiter”: ",",         # 指定分隔符
+        “quotechar”: '"'          # 指定字符串的引号包裹
+        # 字段列表（无表头使用，有表头勿用会读取首行做为数据）
+        "fieldnames": ["name", "age", "gender"],
+    },
+)
+
+data = loader.load()
+print(data)
+```
+
+#### 实战运用
+
+```python
+from langchain_community.document_loaders import CSVLoader
+
+loader = CSVLoader(
+    file_path="./data/stu.csv",
+    csv_args={
+        "delimiter": ",",      
+        "quotechar": '"',    
+        "fieldnames": ['name', 'age', 'gender', '爱好']
+    },
+    encoding="utf-8"            # 指定编码为UTF-8
+)
+
+# 批量加载 .load()   ->  [Document, Document, ...]
+# documents = loader.load()
+#
+# for document in documents:
+#     print(type(document), document)
+
+# 懒加载  .lazy_load()  迭代器 [Document]
+for document in loader.lazy_load():
+    print(document)
+```
+
+### JSONLoader
+
+JSONLoader 用于将J SON 数据加载为 Document 类型对象
+
+使用 JSONLoader 需要额外安装 jq：
+
+```cmd
+pip install jq
+```
+
+jq 是一个跨平台的 json 解析工具，LangChain 底层对 JSON 的解析就是基于 jq 工具实现的。将 JSON 数据的信息抽取出来，封装为 Document 对象，抽取的时候依赖 jq_schema 语法
+
+简单示例 （json 对象）：
+
+```json
+{
+    "name": "周杰轮",
+    "age": 11,
+    "hobby": ["唱", "跳", "RAP"],
+    "other": {
+        "addr": "深圳",
+        "tel": "12332112321"
+     }
+}
+```
+
+- . 表示整个 JSON 对象（根）
+- [] 表示数组
+- .name 表示抽取“周杰轮”
+- .hobby 表示抽取“爱好”数组
+- .hobby[1] 或 .hobby.[1] 表示抽取“跳”
+- .other.addr 表示抽取“深圳”
+
+简单示例 （json 数组）：
+
+```python
+[
+    {"name": "周杰轮", "age": 11, "gender": "男"},
+    {"name": "蔡依临", "age": 12, "gender": "女"},
+    {"name": "王力鸿", "age": 11, "gender": "男"}
+]
+```
+
+- .[]. 得到 3 个字典
+- .[].name 表示抽取全部的 name，即得到 3 个 name 信息
+
+简单示例：
+
+```python
+from langchain_community.document_loaders import JSONLoader
+loader = JSONLoader(
+    file_path="xxx.json",   # 文件路径
+    jq_schema=".",          # jq schema 语法
+    text_content=False,     # 抽取的是否是字符串，默认 True
+    json_lines=True,        # 是否是 JsonLines 文件（每一行都是 JSON 的文件）
+)
+```
+
+如下是一个典型的 JsonLines 文件，如果是该类型的文件需要 `json_lines=True`
+
+```
+{"name": "周杰轮", "age": 11, "gender": "男"}
+{"name": "蔡依临", "age": 12, "gender": "女"}
+{"name": "王力鸿", "age": 11, "gender": "男"}
+```
+
+#### 实战运用 1
+
+stu.json：
+
+```
+{
+    "name": "周杰轮",
+    "age": 11,
+    "hobby": ["唱", "跳", "RAP"],
+    "other": {
+        "addr": "深圳",
+        "tel": "12332112321"
+    }
+}
+```
+
+```python
+from langchain_community.document_loaders import JSONLoader
+
+# stu.json
+loader = JSONLoader(
+    file_path="./data/stu.json",
+    jq_schema=".name",        		  # "周杰轮"
+    # jq_schema=".other.addr",        # "深圳"
+    # jq_schema=".",          		  # 整个数据
+)
+
+"""
+loader = JSONLoader(
+    file_path="./data/stu.json",
+    jq_schema=".",          		  # 整个数据
+    text_content=False,     		  # 告知 JSONLoader, 我抽取的内容不是字符串
+)
+"""
+
+document = loader.load()
+print(document)
+```
+
+#### 实战运用 2
+
+stus.json：
+
+```python
+[
+    {"name": "周杰轮", "age": 11, "gender": "男"},
+    {"name": "蔡依临", "age": 12, "gender": "女"},
+    {"name": "王力鸿", "age": 11, "gender": "男"}
+]
+```
+
+```python
+# stus.json
+loader = JSONLoader(
+    file_path="./data/stus.json",
+    jq_schema=".[].name",     # 所有 "name"
+    text_content=False,       # 告知 JSONLoader 我抽取的内容不是字符串
+ )
+
+document = loader.load()
+print(document)
+```
+
+#### 实战运用 3
+
+stu_json_lines.json：
+
+```python
+{"name": "周杰轮", "age": 11, "gender": "男"}
+{"name": "蔡依临", "age": 12, "gender": "女"}
+{"name": "王力鸿", "age": 11, "gender": "男"}
+```
+
+```python
+# stu_json_lines.json
+loader = JSONLoader(
+    file_path="./data/stu_json_lines.json",
+    jq_schema=".name",
+    text_content=False,       # 告知 JSONLoader 我抽取的内容不是字符串
+    json_lines=True           # 告知 JSONLoader 这是一个 JSONLines 文件（每一行都是一个独立的标准 JSON）
+)
+
+document = loader.load()
+print(document)
+```
+
+### TextLoader 和 文档分割器
+
+基本的加载器：TextLoader，作用是读取文本文件（如.txt），将全部内容放入一个 Document 对象中
+
+#### 简单示例：
+
+```python
+from langchain_community.document_loaders import TextLoader
+
+loader = TextLoader(
+    "xxx.txt",                                                                         		encoding="utf-8",                                                                     
+)
+
+docs = loader.load()
+print(docs)
+print(len(docs))	# 结果为 1
+```
+
+如果文档很大，加载到一个 Document 对象中就不太合适了
+
+RecursiveCharacterTextSplitter（递归字符文本分割器），主要用于按自然段落分割大文档，是 LangChain 官方推荐的默认字符分割器。它在保持上下文完整性和控制片段大小之间实现了良好平衡，开箱即用效果佳
+
+```cmd
+pip install langchain_text_splitters
+```
+
+```python
+from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+loader = TextLoader(
+    "./data/Python基础语法.txt",
+    encoding="utf-8",
+)
+docs = loader.load()
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,     # 分段的最大字符数
+    chunk_overlap=50,   # 分段之间允许重叠的字符数, 确保语义连贯
+    # 文本分段依据
+    separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""],
+    # 字符统计依据（函数）
+    length_function=len,
+)
+
+split_docs = splitter.split_documents(docs)
+```
+
+- docs：[ Document  ]
+- split_docs：[ Document  , Document  , Document  ······ ]
+
+#### 实战运用
+
+```python
+from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+loader = TextLoader("./data/Python基础语法.txt", encoding="utf-8")
+
+docs = loader.load()      	  # [Document]
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,         
+    chunk_overlap=50,       
+    separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""],
+    length_function=len,   	  # 统计字符的依据函数
+)
+
+split_docs = splitter.split_documents(docs)
+
+# print(split_docs)
+print(len(split_docs))
+for doc in split_docs:
+    print(doc)
+    print("="*20)
+```
+
+### PyPDFLoader
+
+LangChain 内支持许多 PDF 的加载器，我们选择其中的 PyPDFLoader 使用。PyPDFLoader 加载器，依赖 PyPDF 库，所以需要安装它：
+
+```cmd
+pip install pypdf
+```
+
+如下代码即可快速加载 PDF 中的文字内容了：
+
+```python
+from langchain_community.document_loaders import PyPDFLoader
+
+loader = PyPDFLoader(
+    file_path="",   # 文件路径必填
+    mode='page',   	# 读取模式，可选 page（按页面划分不同 Document）和 single（单个Document）
+    password='password',  # 文件密码
+)
+```
+
+### Vector stores 向量存储
+
+基于 LangChain 的向量存储，存储嵌入数据，并执行相似性搜索
+
+![27](/images/RAG_Agent/27.png)
+
+如图，这是一个典型的向量存储应用，也即是典型的 RAG 流程，这部分开发主要涉及到：
+
+- 文本转向量（前文已经学习）
+
+- 创建向量存储，基于向量存储完成：
+
+  •  存入向量
+
+  •  删除向量
+
+  •  向量检索
+
+针对存 / 删 / 检 三个步骤，LangChain 为向量存储提供了统一接口：
+
+- add_documents
+- delete
+- similarity_search
+
+#### 内置向量存储的使用
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_community.embeddings import DashScopeEmbeddings
+
+vector_store = InMemoryVectorStore(embedding=DashScopeEmbeddings())
+
+# 添加文档到向量存储，并指定id
+vector_store.add_documents(documents=[doc1, doc2], ids=["id1", "id2"])
+
+# 删除文档（通过指定的id删除）
+vector_store.delete(ids=["id1"])
+
+# 相似性搜索
+similar_docs = vector_store.similarity_search("your query here", 4)
+```
+
+#### 实战运用
+
+info.csv
+
+```python
+source,info
+AAA,Python 是世界上最好的编程语言
+BBB,我要学 python
+AAA,LangChain 极大地方便了大模型开发
+AAA,AI 和 Python 是下一个十年的风口
+BBB,Python 学起来很简单的
+AAA,学习 Python 键盘敲烂月薪过万
+AAA,努力带来成就，Python 助力辉煌
+AAA,学习 Python 的时候也要记得好好休息打打篮球
+AAA,明天晚上吃啥子呀
+BBB,如何快速减肥呢
+```
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_community.embeddings import DashScopeEmbeddings
+from langchain_community.document_loaders import CSVLoader
+
+# 文本转向量的模型用哪个？
+vector_store = InMemoryVectorStore(
+    embedding=DashScopeEmbeddings()
+)
+
+loader = CSVLoader(
+    file_path="./data/info.csv",
+    encoding="utf-8",
+    source_column="source",     # 指定本条数据的来源是哪里
+)
+
+# 全量加载
+documents = loader.load()
+print(documents[1])             # "Python 是世界上最好的编程语言", source: AAA
+
+# id1 id2 id3 id4 ...
+# 向量存储的 新增、删除、检索
+vector_store.add_documents(
+    documents=documents,        # 被添加的文档，类型：list[Document]
+    ids=["id"+str(i) for i in range(1, len(documents)+1)]    # 给添加的文档提供 id（字符串）  list[str]
+)
+
+# 删除  传入 [id, id...]
+vector_store.delete(["id1", "id2"])
+
+# 检索 返回类型 list[Document]
+result = vector_store.similarity_search(
+    "python 是不是简单易学呀",
+    1                           # 检索的结果要几个
+)
+
+print(result)
+```
+
+#### 外部（Chroma）向量存储的使用
+
+```python
+pip install langchain-chroma chromadb
+```
+
+```python
+from langchain_community.embeddings import DashScopeEmbeddings
+from langchain_chroma import Chroma
+
+vector_store = Chroma(
+    collection_name="example_collection",       # 当前向量存储名字，类似数据库的表名称
+    embedding_function=DashScopeEmbeddings(),   # 嵌入模型
+    persist_directory="./chroma_langchain_db",  # 指定数据存放的文件夹
+)
+```
+
+#### 实战运用
+
+```python
+from langchain_chroma import Chroma
+from langchain_community.embeddings import DashScopeEmbeddings
+from langchain_community.document_loaders import CSVLoader
+
+# Chroma 向量数据库（轻量级的）
+vector_store = Chroma(
+    collection_name="test",                        
+    embedding_function=DashScopeEmbeddings(),       
+    persist_directory="./chroma_db"                 
+)
+
+loader = CSVLoader(
+     file_path="./data/info.csv",
+     encoding="utf-8",
+     source_column="source",    
+)
+
+documents = loader.load()
+
+vector_store.add_documents(
+     documents=documents,       
+     ids=["id"+str(i) for i in range(1, len(documents)+1)]
+ )
+
+ # 删除  
+ vector_store.delete(["id1", "id2"])
+
+# 检索 
+result = vector_store.similarity_search(
+    "Python 是不是简单易学呀",
+    1,       
+    filter={"source": "BBB"}                # 数据过滤
+)
+
+print(result)
+```
+
+项目目录中会自动多出来一个 `chroma_db` 文件
+
+![28](/images/RAG_Agent/28.png)
+
+点击 `chroma.sqlite3` ，再点击弹出页面左下角的测试连接，在右侧虚拟表中可以查看存储的数据：
+
+![29](/images/RAG_Agent/29.png)
+
+### 检索向量并构建提示词
+
+```python
+"""
+提示词：用户的提问 + 向量库中检索到的参考资料
+"""
+from langchain_community.chat_models import ChatTongyi
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_community.embeddings import DashScopeEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+def print_prompt(prompt):
+    print(prompt.to_string())
+    print("=" * 20)
+    return prompt
+
+model = ChatTongyi(model="qwen3-max")
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "以我提供的已知参考资料为主，简洁和专业的回答用户问题。参考资料:{context}。"),
+        ("user", "用户提问：{input}")
+    ]
+)
+
+vector_store = InMemoryVectorStore(embedding=DashScopeEmbeddings(model="text-embedding-v4"))
+
+# 准备一下资料（向量库的数据）
+# add_texts 传入一个 list[str] ( 临时用 )
+vector_store.add_texts(
+    ["减肥就是要少吃多练", "在减脂期间吃东西很重要,清淡少油控制卡路里摄入并运动起来", "跑步是很好的运动哦"])
+
+input_text = "怎么减肥？"
+
+# 检索向量库
+result = vector_store.similarity_search(input_text, 2)
+
+reference_text = "["
+for doc in result:
+    reference_text += doc.page_content
+reference_text += "]"
+# print(reference_text)
+# [减肥就是要少吃多练在减脂期间吃东西很重要,清淡少油控制卡路里摄入并运动起来]
+
+chain = prompt | print_prompt | model | StrOutputParser()
+
+res = chain.invoke({"input": input_text, "context": reference_text})
+print(res)
+```
+
+### RunnablePassthrough 的使用
+
+能不能让向量检索加入链？
+
+![30](/images/RAG_Agent/30.png)
+
+InMemoryVectorStore 不是 Runnable 接口的子类实例对象，不能入链。langchain 中向量存储对象，有一个方法：as_retriever，可以返回一个 Runnable 接口的子类实例对象：
+
+```python
+retriever = vector_store.as_retriever(search_kwargs={"k": 2})
+```
+
+`retriever` 就是 Runnable 接口的子类实例对象
+
+那么 retriever 可以入链了吗？
+
+```python
+chain = retriever | prompt | model | StrOutputParser()
+```
+
+我们观察一下 `retriever` 和 `prompt` 的输入输出：
+
+```python
+"""
+retriever:
+    - 输入：用户的提问        		    str
+    - 输出：向量库的检索结果			  list[Document]
+prompt:
+    - 输入：用户的提问 + 向量库的检索结果  dict
+    - 输出：完整的提示词                 PromptValue
+"""
+```
+
+`list[Document]` 类型不能作为 `prompt` 的输入，显然 `retriever` 还不能入链，并且 `prompt` 还会丢失 `用户的提问` 
+
+不管 `prompt` 和 `retriever` 谁在前，都会丢失 `用户的提问` ，如何做到将 `用户的提问` 同时传给 `prompt` 和 `retriever` 呢？
+
+我们可以使用 RunnablePassthrough：
+
+```python
+chain = (
+    {"input": RunnablePassthrough(), "context": retriever | format_func} | prompt | print_prompt | model | StrOutputParser()
+)
+```
+
+在这里我们将字典 `{"input": RunnablePassthrough(), "context": retriever | format_func}` 入链了，字典可以入链吗？我们可以查看 `|` 方法：
+
+```python
+def __or__(
+    self,
+    other: Runnable[Output, Other]
+    | Callable[[Iterator[Output]], Iterator[Other]]
+    | Callable[[AsyncIterator[Output]], AsyncIterator[Other]]
+    | Callable[[Output], Other]
+    | Mapping[str, Runnable[Output, Any] | Callable[[Output], Any] | Any],
+) -> RunnableSerializable[Input, Any]:
+```
+
+`Callable` 是函数，其中的 `Mapping` 就是字典的顶级父类，也就是说字典可以入链
+
+现在的 `chain` 是如何工作的呢？
+
+`chain` 是一个大链套了一个小链，大链就是 `chain`，小链就是 `retriever | format_func`，第一个入链的组件是 `retriever`。当链 .invoke() 时，输入会给 `retriever`，而 `RunnablePassthrough()` 相当于一个占位符，也会将 invoke 的输入带走，input 的值会分别输入给 这两个组件，而 `prompt` 的输入由 `retriever` 提供。其中 `format_func` 是将 `retriever` 的输出类型 list[Document] 转化成字符串
+
+#### 实战运用
+
+```python
+from langchain_community.chat_models import ChatTongyi
+from langchain_core.documents import Document
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_community.embeddings import DashScopeEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+def print_prompt(prompt):
+    print(prompt.to_string())
+    print("=" * 20)
+    return prompt
+
+model = ChatTongyi(model="qwen3-max")
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "以我提供的已知参考资料为主，简洁和专业的回答用户问题。参考资料:{context}。"),
+        ("user", "用户提问：{input}")
+    ]
+)
+
+vector_store = InMemoryVectorStore(embedding=DashScopeEmbeddings(model="text-embedding-v4"))
+
+vector_store.add_texts(
+    ["减肥就是要少吃多练", "在减脂期间吃东西很重要,清淡少油控制卡路里摄入并运动起来", "跑步是很好的运动哦"])
+
+input_text = "怎么减肥？"
+
+retriever = vector_store.as_retriever(search_kwargs={"k": 2})
+
+def format_func(docs: list[Document]):
+    if not docs:
+        return "无相关参考资料"
+
+    formatted_str = "["
+    for doc in docs:
+        formatted_str += doc.page_content
+    formatted_str += "]"
+
+    return formatted_str
+
+chain = (
+    {"input": RunnablePassthrough(), "context": retriever | format_func} | prompt | print_prompt | model | StrOutputParser()
+)
+
+res = chain.invoke(input_text)
+print(res)
+```
+
+## 七、Agent 智能体
+
+### Agent 简介
+
+智能体是一种能够自主规划、决策、执行任务的组件，核心是让大语言模型（LLM）根据任务需求，选择并调用工具，完成单靠模型自身无法解决的复杂问题
+
+- 没有 Agent 时，LLM 只能基于自身训练数据回答问题，遇到需要实时数据、复杂计算、外部工具调用的场景会卡壳
+- 有了 Agent 后，LLM 就像一个“指挥官”，能思考任务步骤 ——> 选择合适工具 ——> 执行工具调用 ——> 根据结构调整策略，直到完成任务 
+
+Agent 核心特点：
+
+- 目标驱动：围绕用户的具体任务目标展开工作
+- 工具调用能力：能连接外部工具，弥补 LLM 的局限性
+- 自主决策与迭代：不需要人工干预，能根据工具返回的结果，判断是否需要继续调用工具，或直接生成最终答案
+
+![31](/images/RAG_Agent/31.png)
+
+以电商商品问答为例：
+
+![32](/images/RAG_Agent/32.png)
+
+普通 Chain 与 Agent 对比：
+
+|            普通 Chain            |                  Agent                   |
+| :------------------------------: | :--------------------------------------: |
+| 执行流程**固定**，按预设步骤运行 | 执行流程**动态**，根据任务和结果自主调整 |
+|     工具调用路径写死在代码里     |         工具选择由 LLM 思考决定          |
+|       适合简单、标准化任务       |     适合复杂、多步骤、需要决策的任务     |
+
+Agent 智能体 = 大语言模型（大脑） + 工具集（手脚） +  决策逻辑（思维）， 是让 LLM 从 "只会回答" 升级为 "会做事（影响现实世界）" 的智能助手
+
+### Agent 初体验
+
+```python
+from langchain.agents import create_agent
+from langchain_community.chat_models.tongyi import ChatTongyi
+from langchain_core.tools import tool
+
+# 扩展大语言模型的能力边界
+@tool(description="查询天气")
+def get_weather() -> str:
+    return "晴天"
+
+agent = create_agent(
+    model=ChatTongyi(model="qwen3-max"),           # 智能体的大脑 LLM
+    tools=[get_weather],                           # 向智能体提供工具列表
+    system_prompt="你是一个聊天助手，可以回答用户问题。",
+)
+
+res = agent.invoke(
+    {
+        "messages": [
+            {"role": "user", "content": "明天深圳的天气如何？"},
+        ]
+    }
+)
+
+for msg in res["messages"]:
+    print(type(msg).__name__, msg.content)
+    
+"""
+HumanMessage 明天深圳的天气如何？
+AIMessage 
+ToolMessage 晴天
+AIMessage 明天深圳的天气是晴天。建议外出时注意防晒，并保持水分补充！
+"""
+
+"""
+parse = StrOutputPaeser()
+
+for msg in res["messages"]:
+    print(f"{type(msg).__name__}: {parser.invoke(msg)}")
+"""
+```
+
+其中第一个 AIMessage 没有输出内容，是模型的思考，ToolMessage 是工具消息
+
+### 流式输出
+
+通过 create_agent 方法可以创建 Agent 对象，其也是 Runnable 接口的子类实现，所以也拥有：
+
+- invoke 执行：一次型得到完整结果
+- stream 执行：流式得到结果
+
+```python
+for chunk in agent.stream({
+    "messages": [{"role": "user", "content": "Search for AI news and summarize the findings"}]
+}, stream_mode="values"):
+    # 每个块都包含该时刻的完整状态, 所以取最后一条, 即为最新
+    latest_message = chunk["messages"][-1]
+    if latest_message.content:
+        print(f"Agent: {latest_message.content}")
+    elif latest_message.tool_calls:
+        print(f"Calling tools: {[tc['name'] for tc in latest_message.tool_calls]}")
+```
+
+#### 实战运用
+
+```python
+from langchain.agents import create_agent
+from langchain_community.chat_models.tongyi import ChatTongyi
+from langchain_core.tools import tool
+
+@tool(description="获取股价，传入股票名称，返回字符串信息")
+def get_price(name: str) -> str:
+    return f"股票{name}的价格是20元"
+
+@tool(description="获取股票信息，传入股票名称，返回字符串信息")
+def get_info(name: str) -> str:
+    return f"股票{name}，是一家A股上市公司，专注于IT职业教育。"
+
+agent = create_agent(
+    model=ChatTongyi(model="qwen3-max"),
+    tools=[get_price, get_info],
+    system_prompt="你是一个智能助手，可以回答股票相关问题，记住请告知我思考过程，让我知道你为什么调用某个工具"
+)
+
+for chunk in agent.stream(
+    {"messages": [{"role": "user", "content": "传智教育股价多少，并介绍一下"}]},
+    stream_mode="values"
+):
+    latest_message = chunk['messages'][-1]
+
+    if latest_message.content:
+        print(type(latest_message).__name__, latest_message.content)
+
+    try:
+        if latest_message.tool_calls:
+            print(f"工具调用： { [tc['name'] for tc in latest_message.tool_calls]  }")
+    except AttributeError as e:
+        pass
+```
+
+### ReAct 行动框
+
+Agent ReAct 是大模型智能体的核心思考与行动框架，全称 Reasoning + Acting（推理 + 行动），是让 Agent 像人类一样「思考问题→制定策略→执行行动→验证结果」的关键逻辑
+
+简单来说：ReAct 让 Agent 不再是 “直接回答问题”，而是通过 “自然语言思考过程” 指导工具调用，一步步解决复杂问题，完美适配需要多步推理、工具协作的场景（如智能客服、报告生成、任务规划等）
+
+一个典型的 ReAct 范式的 Agent 如图所示：
+
+- 思考 Reasoning：分析问题，判断现有信息是否足够，明确下一步
+
+  即模型决策是否需要调用外部工具获取更多信息用来回答
+
+- 行动 Action：执行思考阶段指定的策略
+
+  即基于模型决策结果，调用工具获取信息
+
+- 观察 Observation：获取行动的结果，提取有效信息
+
+  即获取工具返回值即判断工具是否正常工作位下一轮思考提供信息
+
+- （再）思考 → （再）行动 → （再）观察 → 循环往复直到结束
+
+![33](/images/RAG_Agent/33.png)
+
+LangChain 的 Agent 对象遵循 ReAct 框架要求，在执行的过程中会持续的自我思考、自我行动、自我观察。 一个典型的 ReAct 案例如下：
+
+```python
+@tool(description="获取体重，返回值是整数，单位千克")
+def get_weight() -> int:
+    return 90
+
+@tool(description="获取身高，返回值是整数，单位厘米")
+def get_height() -> int:
+    return 172
+
+agent = create_agent(
+    model=ChatTongyi(model="qwen3-max"),
+    system_prompt="""你是严格遵循ReAct框架的智能体，必须按「思考→行动→观察→再思考」的流程解决问题，
+且**每轮仅能思考并调用1个工具**，禁止单次调用多个工具。
+并告知我你的思考过程，工具的调用原因，按思考、行动、观察三个结构告知我""",
+    tools=[get_weight, get_height],
+)
+
+for chunk in agent.stream(
+    {"messages": [{"role": "user", "content": "计算我的BMI"}]},
+    stream_mode="values",
+):
+    latest_message = chunk["messages"][-1]
+    if latest_message.content:
+        print(latest_message.content.strip())
+    try:
+        if latest_message.tool_calls:
+            print(f"Calling tools: {[tc['name'] for tc in latest_message.tool_calls]}")
+    except AttributeError:
+        pass
+```
+
+“**每轮仅能思考并调用1个工具，禁止单次调用多个工具**”只是为了方便展示，实际上 Langchain 是由并行调用工具的能力
+
+### middleware 中间件
+
+中间件的作用是对智能体的每一步工作进行控制和自定义的执行，其作用场景：
+
+- 日志记录、分析、调试
+- 转换提示词、工具选择
+- 重试、备用、提前终止等逻辑控制
+- 安全防护、个人身份检测等
+
+无中间件：
+
+![34](/images/RAG_Agent/34.png)
+
+有中间件：
+
+![35](/images/RAG_Agent/35.png)
+
+LangChain 中内置了一些基础的中间件，参见：
+
+https://docs.langchain.com/oss/python/langchain/middleware/built‑in 
+
+中间件通过 Hooks 钩子来实现拦截，自定义中间件可以简单的使用装饰器来定义
+
+节点式钩子（执行点顺序拦截）：
+
+- before_agent：agent 执行之前拦截
+- after_agent：agent 执行后拦截
+- before_model：模型执行前拦截
+- after_model：模型执行后拦截
+
+针对工具和模型的包装式钩子：
+
+- wrap_model_call：每个模型调用时候拦截
+- wrap_tool_call：每个工具调用时候拦截
+
+```python
+from langchain.agents import create_agent, AgentState
+from langchain.agents.middleware import before_agent, after_agent, before_model, after_model, wrap_model_call, wrap_tool_call
+from langchain_community.chat_models.tongyi import ChatTongyi
+from langchain_core.tools import tool
+from langgraph.runtime import Runtime
+
+@tool(description="查询天气，传入城市名称字符串，返回字符串天气信息")
+def get_weather(city: str) -> str:
+    return f"{city}天气：晴天"
+
+@before_agent
+def log_before_agent(state: AgentState, runtime: Runtime) -> None:
+    # agent执行前会调用这个函数并传入state和runtime两个对象
+    print(f"[before agent]agent启动，并附带{len(state['messages'])}消息")
+
+@after_agent
+def log_after_agent(state: AgentState, runtime: Runtime) -> None:
+    print(f"[after agent]agent结束，并附带{len(state['messages'])}消息")
+
+@before_model
+def log_before_model(state: AgentState, runtime: Runtime) -> None:
+    print(f"[before_model]模型即将调用，并附带{len(state['messages'])}消息")
+
+@after_model
+def log_after_model(state: AgentState, runtime: Runtime) -> None:
+    print(f"[after_model]模型调用结束，并附带{len(state['messages'])}消息")
+
+@wrap_model_call
+def model_call_hook(request, handler):
+    print("模型调用啦")
+    
+    return handler(request)
+
+@wrap_tool_call
+def monitor_tool(request, handler):
+    print(f"工具执行：{request.tool_call['name']}")
+    print(f"工具执行传入参数：{request.tool_call['args']}")
+
+    return handler(request)
+
+agent = create_agent(
+    model=ChatTongyi(model="qwen3-max"),
+    tools=[get_weather],
+    middleware=[log_before_agent, log_after_agent, log_before_model, log_after_model, model_call_hook, monitor_tool]
+)
+
+res = agent.invoke({"messages": [{"role": "user", "content": "深圳今天的天气如何呀，如何穿衣"}]})
+
+"""
+[before agent]agent启动，并附带1消息
+[before_model]模型即将调用，并附带1消息
+模型调用啦
+[after_model]模型调用结束，并附带2消息
+工具执行：get_weather
+工具执行传入参数：{'city': '深圳'}
+[before_model]模型即将调用，并附带3消息
+模型调用啦
+[after_model]模型调用结束，并附带4消息
+[after agent]agent结束，并附带4消息
+"""
+```
 
 ## 手写笔记
 
