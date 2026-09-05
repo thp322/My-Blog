@@ -7,6 +7,8 @@ description: 讲解大模型落地企业场景下 RAG、Agent 核心概念，以
 
 随着大模型技术快速普及，单纯调用大模型接口已经很难满足企业实际业务诉求。企业需要大模型能够读取内部私有文档、输出业务精准答案，还可以自主拆解并执行复杂业务任务。 RAG 与 Agent 就是解决上述痛点的两大核心方案：**RAG 解决知识来源与回答准确性问题，Agent 解决复杂任务自动化执行问题**。而 LangChain 作为主流开发框架，把这两套能力封装成可落地的工程组件，是大模型应用开发的必备工具。
 
+相关源码可前往GitHub地址下载：[LangChain 教程：RAG 与 Agent 开发实战](https://github.com/thp322/LangChain-Tutorial)
+
 ---
 
 ## 一、RAG 与 Agent
