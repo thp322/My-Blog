@@ -284,6 +284,7 @@ class Solution(object):
                     cur_num += 1
                     cur_len +=1
                 max_len = max(max_len, cur_len)
+                
 		return max_len
 ```
 
@@ -333,7 +334,7 @@ class Solution(object):
 - 左指针与右指针同时指向第一位数
 - **左指针 left**：指向应该放置非零数的位置
 - **右指针 right**：遍历数组，寻找非零元素
-- right 不断向后遍历；遇到非 0 数字，把这个数放到 left 位置；left 右移，right 继续向后遍历
+- right 不断向后遍历；遇到非 0 数字，与 left 交换位置；left 右移，right 继续向后遍历
 
 
 ### 代码（Python）
@@ -342,14 +343,192 @@ class Solution(object):
 class Solution(object):
     def moveZeroes(self, nums):
         left = 0
-        # right 遍历找非零，放到 left 位置
+        # right 遍历找非零，与 left 交换位置
         for right in range(len(nums)):
-            if nums[right] != 0:
-                nums[ledt] = num[right]
+            if nums[right] ! = 0:
+                tem = nums[right]
+                nums[right] = nums[left]
+                nums[left] = tem
+                left += 1 
+```
+
+
+
+
+
+
+
+
+
+## 题目 005：盛最多水的容器 [ 中等 ]
+
+[11. 盛最多水的容器 - 力扣（LeetCode）](https://leetcode.cn/problems/container-with-most-water/description/?envType=study-plan-v2&envId=top-100-liked)
+
+#双指针
+
+### 题目描述
+
+给定一个长度为 `n` 的整数数组 `height` 。有 `n` 条垂线，第 `i` 条线的两个端点是 `(i, 0)` 和 `(i, height[i])` 。
+
+找出其中的两条线，使得它们与 `x` 轴共同构成的容器可以容纳最多的水。
+
+返回容器可以储存的最大水量。
+
+**说明**：你不能倾斜容器。
+
+### 示例
+
+**示例 1：**
+
+![2](/images/algorithm-LeetCode/2.jpg)
+
+```
+输入：[1,8,6,2,5,4,8,3,7]
+输出：49 
+解释：图中垂直线代表输入数组 [1,8,6,2,5,4,8,3,7]。在此情况下，容器能够容纳水（表示为蓝色部分）的最大值为 49。
+```
+
+**示例 2：**
+
+```
+输入：height = [1,1]
+输出：1
+```
+
+### 提示
+
+- `n == height.length`
+- `2 <= n <= 105`
+- `0 <= height[i] <= 104`
+
+### 解题思路
+
+- 左指针指向0，右指针指向最后一位
+- 高度低的指针向中间移动
+
+
+### 代码（Python）
+
+```python
+class Solution(object):
+    def maxArea(self, height):
+        left = 0
+        right = len(height) - 1
+        max_area = 0
+        while left < right:
+            cur_area = (right - left) * min(height[left], height[right])
+            max_area = max(max_area, cur_area)
+            if height[left] < height[right]:
                 left += 1
-        # left之后全部置0
-        for i in range(left, len(nums)):
-            nums[i] = 0
+            else:
+                right -= 1 
+
+        return max_area
+```
+
+
+
+
+
+
+
+## 题目 006：三数之和 [ 中等 ]
+
+[15. 三数之和 - 力扣（LeetCode）](https://leetcode.cn/problems/3sum/description/?envType=study-plan-v2&envId=top-100-liked)
+
+#双指针
+
+### 题目描述
+
+给你一个整数数组 `nums` ，判断是否存在三元组 `[nums[i], nums[j], nums[k]]` 满足 `i != j`、`i != k` 且 `j != k` ，同时还满足 `nums[i] + nums[j] + nums[k] == 0` 。请你返回所有和为 `0` 且不重复的三元组。
+
+**注意**：答案中不可以包含重复的三元组。
+
+### 示例
+
+**示例 1：**
+
+```
+输入：nums = [-1,0,1,2,-1,-4]
+输出：[[-1,-1,2],[-1,0,1]]
+解释：
+nums[0] + nums[1] + nums[2] = (-1) + 0 + 1 = 0 。
+nums[1] + nums[2] + nums[4] = 0 + 1 + (-1) = 0 。
+nums[0] + nums[3] + nums[4] = (-1) + 2 + (-1) = 0 。
+不同的三元组是 [-1,0,1] 和 [-1,-1,2] 。
+注意，输出的顺序和三元组的顺序并不重要。
+```
+
+**示例 2：**
+
+```
+输入：nums = [0,1,1]
+输出：[]
+解释：唯一可能的三元组和不为 0 。
+```
+
+**示例 3：**
+
+```
+输入：nums = [0,0,0]
+输出：[[0,0,0]]
+解释：唯一可能的三元组和为 0 。
+```
+
+### 提示
+
+- `3 <= nums.length <= 3000`
+- `-105 <= nums[i] <= 105`
+
+### 解题思路
+
+1. **排序 + 双指针**  
+   - 排序：使数组有序，具备单调性
+   - **降维**：固定第一个数`nums[i]`，那么问题转化为：在 i 后面的区间，找两个数，两数之和等于 `-nums[i]`，退化成两数之和问题
+
+
+### 代码（Python）
+
+排序 + 双指针
+
+```python
+class Solution(object):
+    def threeSum(self, nums):
+        res = []       
+        nums.sort()     
+        n = len(nums)  
+
+        # 固定第一个数
+        for i in range(n):
+            # 剪枝：nums[i]>0，后面元素都>=nums[i]，三数之和一定>0，直接结束循环
+            if nums[i] > 0:
+                break
+            # 外层去重
+            if i > 0 and nums[i] == nums[i-1]:
+                continue
+            left = i + 1   
+            right = n - 1 
+            while left < right:
+                total = nums[i] + nums[left] + nums[right]
+                if total < 0:
+                    # 和太小，需要更大的数字，左指针右移
+                    left += 1
+                elif total > 0:
+                    # 和太大，需要更小的数字，右指针左移
+                    right -= 1
+                else:
+                    res.append([nums[i], nums[left], nums[right]])
+                    # 内层去重
+                    # 跳过 left 后面全部相同的值
+                    while left < right and nums[left] == nums[left+1]:
+                        left += 1
+                    # 跳过 right 前面全部相同的值
+                    while left < right and nums[right] == nums[right-1]:
+                        right -= 1
+                    left += 1
+                    right -= 1
+                    
+        return res
 ```
 
 
@@ -429,6 +608,7 @@ class Solution(object):
             char_set.add(s[right])
             # 更新最大长度
             max_len = max(max_len, right - left + 1)
+            
         return max_len
 ```
 
@@ -879,7 +1059,7 @@ class Solution(object):
 
 ### 代码（Python）
 
-#### 
+
 
 ```python
 
