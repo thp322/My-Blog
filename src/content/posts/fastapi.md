@@ -105,6 +105,12 @@ async def register(user: User):
 
 ![3](/images/fastapi/3.png)
 
+
+
+---
+
+
+
 ## 二、FastAPI 基础入门
 
 ### 1、第一个 FastAPI 程序
@@ -500,63 +506,25 @@ def read_unicorn(name: str):
     return {"unicorn_name": name}
 ```
 
+
+
+---
+
+
+
 ## 三、FastAPI 进阶
 
+### 1、中间件（Middleware）
 
+使用中间件为每个请求前后添加统一的处理逻辑
 
+啥时候会用到？
 
+![11](/images/fastapi/11.png)
 
+实际开发中以下事务都可以用中间件处理：
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## 1、中间件（Middleware）
-
-### 什么是中间件
-
-中间件是一个函数，它会在每个请求被特定的路径操作处理之前，以及在每个响应返回之前工作。
-
-### 中间件的工作流程
-
-```
-请求 → 中间件1 → 中间件2 → ... → 路由处理 → ... → 中间件2 → 中间件1 → 响应
-```
-
-### 中间件写法示例
-
-```python
-from fastapi import FastAPI, Request
-
-app = FastAPI()
-
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    # 请求处理前执行
-    start_time = time.time()
-
-    # 调用下一个中间件或路由处理
-    response = await call_next(request)
-
-    # 请求处理后执行
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(process_time)
-
-    return response
-```
-
-### 中间件常见用途
+![12](/images/fastapi/12.png)
 
 | 用途       | 说明                  |
 | ---------- | --------------------- |
@@ -566,15 +534,69 @@ async def add_process_time_header(request: Request, call_next):
 | 响应头添加 | 添加统一的响应头      |
 | 性能监控   | 记录请求处理时间      |
 
----
+#### 什么是中间件
 
-## 2、依赖注入（Dependency Injection）
+中间件（Middleware）是一个在每次请求进入 FastAPI 应用时都会被执行的函数
 
-### 什么是依赖注入
+它在请求到达实际的路径操作（路由处理函数）之前运行，并且在响应返回给客户端之前再运行一次
 
-依赖注入是一种设计模式，允许你声明函数需要哪些依赖，然后由 FastAPI 自动提供这些依赖。
+![13](/images/fastapi/13.png)
 
-### 依赖注入的应用场景
+中间件执行顺序按代码顺序自下而上
+
+```
+请求 → 中间件1 → 中间件2 → ... → 路由处理 → ... → 中间件2 → 中间件1 → 响应
+```
+
+#### 中间件写法
+
+函数的顶部使用装饰器 `@app.middleware("http")`
+
+```python
+# request: 请求
+# call_next: 传递请求给路径处理函数
+@app.middleware("http")
+async def middleware2(request, call_next):
+    print("中间件2 start")
+    response = await call_next(request)      # 向下传递请求，await 异步执行
+    print("中间件2 end")
+    return response
+
+@app.middleware("http")
+async def middleware1(request, call_next):
+    print("中间件1 start")
+    response = await call_next(request)
+    print("中间件1 end")
+    return response
+```
+
+```
+中间件2 start
+中间件1 start
+中间件1 end
+中间件2 end
+```
+
+### 2、依赖注入（Dependency Injection）
+
+使用依赖注入系统来共享通用逻辑，减少代码重复
+
+为什么不用中间件做通用逻辑呢？
+
+![14](/images/fastapi/14.png)
+
+- 依赖项：可重用的组件（函数/类），负责提供某种功能或数据
+- 注入：FastAPI 自动帮你调用依赖项，并将结果"注入"到路径操作函数中
+
+#### 优点
+
+-  代码复用：一次编写，多处使用 
+- 解耦：业务逻辑与基础设施代码分离 
+- 易于测试：轻松地用模拟依赖替换真实依赖进行测试
+
+#### 应用场景
+
+![15](/images/fastapi/15.png)
 
 | 场景       | 说明               |
 | ---------- | ------------------ |
@@ -584,177 +606,195 @@ async def add_process_time_header(request: Request, call_next):
 | 参数校验   | 统一的参数校验逻辑 |
 | 日志记录   | 统一的日志处理     |
 
-### 依赖注入基本用法
+#### 创建依赖注入步骤
+
+1. 创建依赖项：
+
+   ```python
+   async def common_parameters(
+       skip: int = Query(0, ge=0),
+       limit: int = Query(10, le=60)
+   ):
+       return {
+           "skip": skip, 
+           "limit": limit
+       }
+   ```
+
+2. 导入 Depends：
+
+   ```python
+   from fastapi import Depends
+   ```
+
+3. 声明依赖项：
+
+   ```python
+   @app.get("news/news_list'")
+   async def get_news_list(
+       commons = Depends(common_parameters)
+   ):
+   	return commons
+   ```
+
+例子：
 
 ```python
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Query, Depends  # 2. 导入 Depends
 
 app = FastAPI()
 
-# 定义依赖函数
-def get_db():
-    # 获取数据库连接
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# 分页参数逻辑共用： 新闻列表和用户列表
+# 1. 依赖项
+async def common_parameters(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, le=60)
+):
+    return {"skip": skip, "limit": limit}
 
-# 在路由中使用依赖
-@app.get("/items/")
-def read_items(db = Depends(get_db)):
-    # db 已经被自动注入
-    items = db.query(Item).all()
-    return items
-
-# 多个依赖
-@app.get("/users/{user_id}")
-def read_user(user_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    return {"user_id": user_id, "user": current_user}
-```
-
-### 带参数的依赖注入
-
-```python
-from fastapi import FastAPI, Depends
-
-app = FastAPI()
-
-def common_parameters(q: str = None, skip: int = 0, limit: int = 100):
-    return {"q": q, "skip": skip, "limit": limit}
-
-@app.get("/items/")
-def read_items(commons: dict = Depends(common_parameters)):
+# 3. 声明依赖项 → 依赖注入
+@app.get("/news/news_list")
+async def get_news_list(commons=Depends(common_parameters)):
     return commons
 
-@app.get("/users/")
-def read_users(commons: dict = Depends(common_parameters)):
+@app.get("/user/user_list")
+async def get_user_list(commons=Depends(common_parameters)):
     return commons
 ```
 
----
+### 3、ORM（对象关系映射）
 
-## 3、ORM（对象关系映射）
+ORM（Object-RelationalMapping，对象关系映射）是一种编程技术，用于在面向对象编程语言和关系型数据库之间建立映射。它允许开发者通过操作对象的方式与数据库进行交互，而无需直接编写复杂的SQL语句
 
-### ORM 简介
+#### （1）ORM 优势
 
-ORM（Object-Relational Mapping）是一种技术，它将数据库表映射为编程语言中的对象，使开发者可以使用面向对象的方式操作数据库，而不需要直接写 SQL 语句。
+- 减少重复的 SQL 代码 
+- 代码更简洁易读 
+- 自动处理数据库连接和事务 
+- 自动防止 SQL 注入攻击
 
-### 常见的 ORM 框架
+#### （2）常见的 ORM 框架
 
-| 框架             | 语言   | 特点                          |
-| ---------------- | ------ | ----------------------------- |
-| SQLAlchemy       | Python | 最流行的 Python ORM，功能强大 |
-| Django ORM       | Python | Django 自带 ORM，简单易用     |
-| Peewee           | Python | 轻量级 ORM，适合小项目        |
-| Hibernate        | Java   | Java 生态最流行的 ORM         |
-| Entity Framework | .NET   | .NET 官方 ORM                 |
+| 排名 | 框架           | 特点                     | 适应场景                   |
+| :--: | -------------- | ------------------------ | -------------------------- |
+|  1   | SQLAlchemy ORM | 功能最强、最灵活、企业级 | 各类 API、微服务、数据应用 |
+|  2   | Django ORM     | 封装好、上手快           | Django 项目、管理后台      |
+|  3   | Tortoise ORM   | 全异步                   | 异步 Web 服务、高并发 API  |
 
-### FastAPI 中的 ORM 使用（以 SQLAlchemy 为例）
+#### （3）ORM 使用流程（以 SQLAlchemy 为例）
 
-#### ORM 使用流程
+![16](/images/fastapi/16.png)
 
 ```
-1. 安装依赖 → 2. 创建数据库引擎 → 3. 定义模型类 → 4. 创建表 → 5. CRUD 操作
+1. 安装依赖 → 2. 创建数据库引擎 → 3. 定义模型类 → 4. 启动应用时创建表 → 5. CRUD 操作
 ```
 
-#### 安装依赖
+##### 安装依赖
 
 ```bash
 pip install sqlalchemy
-pip install aiomysql  # 如果使用 MySQL
+pip install aiomysql         # 如果使用 MySQL
 pip install psycopg2-binary  # 如果使用 PostgreSQL
 ```
 
-#### 创建数据库引擎
+##### 创建数据库引擎
+
+使用 `create_async_engine` 创建异步引擎
 
 ```python
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+# 1. 创建异步引擎
 
-# 数据库连接字符串格式：mysql+pymysql://用户名:密码@主机:端口/数据库名
-DATABASE_URL = "mysql+pymysql://root:password@localhost:3306/fastapi_db"
+from sqlalchemy.ext.asyncio import create_async_engine
 
-# 创建数据库引擎
-engine = create_engine(DATABASE_URL)
+ASYNC_DATABASE_URL = "mysql+aiomysql://root:123456@localhost:3306/fastapi_test?charset=utf8"
+# 123456: 密码
+# fastapi_test: 数据库名
 
-# 创建会话工厂
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# 创建基类
-Base = declarative_base()
-
-# 获取数据库会话的依赖
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# 创建异步引擎
+async_engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    echo=True,             # 输出 SQL 日志
+    pool_size=10,          # 设置连接池中保持的持久连接数
+    max_overflow=20        # 设置连接池允许创建的额外连接数，即最大连接数为 10 + 20 = 30
+)
 ```
 
-#### 定义模型类
+##### 定义模型类
+
+1. 基类，继承 `DeclarativeBase`（包含通用属性和字段的映射） 
+2. 定义数据库表对应的模型类
 
 ```python
-from sqlalchemy import Column, Integer, String, Float, DateTime
-from sqlalchemy.sql import func
+# 2. 定义模型类： 基类 + 表对应的模型类
+# 基类：创建时间、更新时间；
+# 书籍表：id、书名、作者、价格、出版社
 
-class Item(Base):
-    __tablename__ = "items"
+from sqlalchemy import DateTime, func, String, Float
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), nullable=False)
-    description = Column(String(300))
-    price = Column(Float, nullable=False)
-    tax = Column(Float)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, onupdate=func.now())
+class Base(DeclarativeBase):
+    create_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, comment="创建时间")
+    update_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, onupdate=func.now(), comment="修改时间")
 
-class User(Base):
-    __tablename__ = "users"
+class Book(Base):
+    __tablename__ = "book"
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
-    hashed_password = Column(String(100), nullable=False)
-    is_active = Column(Integer, default=1)
+    id: Mapped[int] = mapped_column(primary_key=True, comment="书籍id")
+    bookname: Mapped[str] = mapped_column(String(255), comment="书名")
+    author: Mapped[str] = mapped_column(String(255), comment="作者")
+    price: Mapped[float] = mapped_column(Float, comment="价格")
+    publisher: Mapped[str] = mapped_column(String(255), comment="出版社")
 ```
 
-#### 创建数据库表
+##### 创建数据库表
+
+1. 从连接池获取异步连接，开启事务，执行 ORM 操作
+2. FastAPI 应用启动时，创建数据库表
 
 ```python
-# 创建所有表
-Base.metadata.create_all(bind=engine)
+# 3. 建表：定义函数建表 → FastAPI 启动的时候调用建表的函数
 
-# 或只创建特定表
-Item.__table__.create(bind=engine)
+async def create_tables():
+    # 获取异步引擎，创建事务 - 建表
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)  # Base 模型类的元数据创建
+        
+# 启动 fastAPI 时建表
+@app.on_event("startup")   
+async def startup_event():
+    await create_tables()
 ```
 
-#### 在路由中使用 ORM
+##### 在路由中使用 ORM
+
+核心：创建依赖项，使用 Depends 注入到处理函数
 
 ```python
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 
-app = FastAPI()
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,         # 绑定数据库引擎
+    class_=AsyncSession,       # 指定会话类
+    expire_on_commit=False     # 提交后会话不过期，不会重新查询数据库
+)
 
-@app.get("/items/")
-def get_items(db: Session = Depends(get_db)):
-    items = db.query(Item).all()
-    return items
-
-@app.get("/items/{item_id}")
-def get_item(item_id: int, db: Session = Depends(get_db)):
-    item = db.query(Item).filter(Item.id == item_id).first()
-    if not item:
-        return {"error": "Item not found"}
-    return item
+# 依赖项
+async def get_database():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session             # 返回数据库会话给路由处理函数
+            await session.commit()    # 提交事务
+        except Exception:
+            await session.rollback()  # 有异常，回滚
+            raise
+        finally:
+            await session.close()     # 关闭会话
 ```
 
-### ORM 查询操作
+#### （4）ORM 查询操作
 
-#### 基础查询
+##### 基础查询
 
 ```python
 # 获取所有记录
@@ -774,7 +814,7 @@ items = db.query(Item).order_by(Item.price).all()
 items = db.query(Item).order_by(Item.price.desc()).all()  # 降序
 ```
 
-#### 条件查询
+##### 条件查询
 
 ```python
 from sqlalchemy import and_, or_, not_
@@ -815,7 +855,7 @@ items = db.query(Item).filter(or_(Item.name == "手机", Item.name == "电脑"))
 items = db.query(Item).filter(not_(Item.price == 0)).all()
 ```
 
-#### 模糊查询
+##### 模糊查询
 
 ```python
 from sqlalchemy import like, ilike
@@ -829,7 +869,7 @@ items = db.query(Item).filter(Item.name.like("%手机")).all()   # 以"手机"�
 items = db.query(Item).filter(Item.name.ilike("%PHONE%")).all()
 ```
 
-#### 聚合查询
+##### 聚合查询
 
 ```python
 from sqlalchemy import func
@@ -858,7 +898,7 @@ results = db.query(Item.name, func.count(Item.id)).group_by(Item.name).all()
 results = db.query(Item.name, func.count(Item.id)).group_by(Item.name).having(func.count(Item.id) > 1).all()
 ```
 
-#### 分页查询
+##### 分页查询
 
 ```python
 from sqlalchemy import desc
@@ -882,7 +922,7 @@ def get_items(page: int = 1, page_size: int = 10, db: Session = Depends(get_db))
     }
 ```
 
-#### ORM 获取数据总结
+##### ORM 获取数据总结
 
 ```python
 # 基本查询
@@ -906,7 +946,7 @@ db.query(func.count(Model.id)).scalar()
 db.query(func.sum(Model.field)).scalar()
 ```
 
-### ORM 新增操作
+#### ORM 新增操作
 
 ```python
 # 方式一：创建对象后添加
@@ -929,7 +969,7 @@ db.add_all(items)
 db.commit()
 ```
 
-### ORM 更新操作
+#### ORM 更新操作
 
 ```python
 # 方式一：先查询后更新
@@ -952,7 +992,7 @@ db.query(Item).filter(Item.id == 1).update({
 db.commit()
 ```
 
-### ORM 删除操作
+#### ORM 删除操作
 
 ```python
 # 方式一：先查询后删除
@@ -970,7 +1010,7 @@ db.query(Item).filter(Item.id == 1).delete()
 db.commit()
 ```
 
-### ORM 使用注意事项
+#### ORM 使用注意事项
 
 1. **提交事务**：增删改操作后必须调用 `commit()` 提交事务
 2. **刷新对象**：新增后使用 `refresh()` 获取生成的 ID

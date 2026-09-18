@@ -50,6 +50,12 @@ description: 讲解大模型落地企业场景下 RAG、Agent 核心概念，以
 
 - `LangChain`：目前工业界最主流的开发框架是 **LangChain**，它封装了文档加载、文本切分、向量存储、检索、工具调用、Agent 规划等全套组件，开发者不用从零实现底层逻辑，可以快速搭建 RAG 知识库和 Agent 智能体应用
 
+
+
+---
+
+
+
 ## 二、前置准备-大模型的接入
 
 ### 1、云端大模型
@@ -262,6 +268,12 @@ for chunk in completion:
     print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
+
+
+---
+
+
+
 ## 三、OpenAI 库的基础使用
 
 OpenAI 库是 OpenAI 官方推出的 python SDK，核心作用是让开发者能简单、高效地调用 OpenAI 的各类 API（如 GPT 聊天、DALL · E 绘图、语音转文字等），无需手动处理 HTTP 请求、身份验证等底层细节
@@ -442,6 +454,12 @@ for chunk in response:
 ```
 
 当前的历史消息是一次性的，如果是生产系统可以将消息保存到文件、数据库等持久化工具内，需要的时候提取使用
+
+
+
+---
+
+
 
 ## 四、提示词工程
 
@@ -734,6 +752,12 @@ for q in questions:
     print(response.choices[0].message.content)
 ```
 
+
+
+---
+
+
+
 ## 五、RAG 介绍
 
 ### LangChain 简介
@@ -941,6 +965,12 @@ if __name__ == '__main__':
     print("ac:", cosine_similarity(vec_a, vec_c))
     print("ad:", cosine_similarity(vec_a, vec_d))
 ```
+
+
+
+---
+
+
 
 ## 六、RAG 开发
 
@@ -2524,6 +2554,12 @@ res = chain.invoke(input_text)
 print(res)
 ```
 
+
+
+---
+
+
+
 ## 七、Agent 智能体
 
 ### Agent 简介
@@ -2813,6 +2849,12 @@ res = agent.invoke({"messages": [{"role": "user", "content": "深圳今天的天
 [after agent]agent结束，并附带4消息
 """
 ```
+
+
+
+---
+
+
 
 ## 手写笔记
 

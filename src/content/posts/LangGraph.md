@@ -45,6 +45,12 @@ $$
 
 大多数项目从 LangChain 的 create_agent 开始；需要复杂编排时引入 LangGraph
 
+
+
+---
+
+
+
 ## 二、环境配置
 
 ### 安装依赖
@@ -145,6 +151,12 @@ from langchain_deepseek import ChatDeepSeek
 # API Key 自动从 DEEPSEEK_API_KEY 环境变量读取
 model = ChatDeepSeek(model="deepseek-v4-flash")
 ```
+
+
+
+---
+
+
 
 ## 三、LangGraph 总览
 
@@ -281,6 +293,12 @@ Functional API 采用命令式方式构建工作流，更接近普通 Python 函
 本文介绍 `Graph API`，对 `Functional API` 感兴趣的同学自行查阅
 
 > https://docs.langchain.com/oss/python/langgraph/functional-api
+
+
+
+---
+
+
 
 ## 四、LangGraph 代码开发
 
@@ -1563,6 +1581,12 @@ class AgentState(TypedDict, Generic[ResponseT]):
 
    因此，在普通自定义 `LangGraph` 项目中，一般不建议直接基于 `AgentState` 扩展图状态
 
+
+
+---
+
+
+
 ## 五、控制流与节点执行
 
 ### 1、顺序结构
@@ -2609,6 +2633,12 @@ builder.add_edge("router", "joke_node")
 
 
 
+
+
+
+
+
+---
 
 
 
