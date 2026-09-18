@@ -2266,6 +2266,318 @@ display(graph)
 
 #### 动态分支（Dynamic Branch）
 
+定义：节点的后续执行路径在 **运行时** 才确定，可以根据当前状态、输入数据或中间结果，动态决定要触发哪些下游任务或跳转到哪个下游节点
+
+- 特点：
+
+  - 下游执行目标可以在运行时选择
+  - 下游任务数量可以在运行时决定
+  - 可以为同一个下游节点动态创建多个执行任务
+  - 适合实现 Map-Reduce 式动态扇出、多任务并行处理、运行时条件跳转等场景
+
+  需要注意的是，所谓“动态”通常不是指运行时临时创建新的节点定义。节点本身一般仍需要在图编译前注册动态性主要体现在：**运行时决定触发哪些节点，以及为这些节点创建多少个执行任务**
+
+- 典型用法：
+
+  - **`Send`**（动态扇出任务/数据）
+  - **`Command(goto=...)`**（运行时跳转到下游节点）
+
+ 核心判断：
+
+> **运行时决定后续执行目标或任务数量 → 动态分支**
+
+##### 并行节点
+
+**`Send`** 结合 **`add_conditional_edges()`** 使用，可以用于动态扇出任务
+
+所谓**扇出（Fan-out）**，是指一个上游节点像扇子一样，向外分发出多个下游任务。例如，根据一个主题，同时生成诗、词、笑话三个任务；又如，根据一个列表，为列表中的每个元素动态启动一个处理任务
+
+具体来说，路由函数可以返回一个 **`Send`** 实例序列。每个 **`Send`** 实例都描述了一次独立的任务分发：
+
+- 分发到哪个下游节点
+- 给这个下游节点传入什么私有状态
+
+运行时，**`LangGraph`** 会根据返回的每个 **`Send`** 实例创建对应的任务。这些任务通常会在同一个超步中并行执行
+
+**`Send`** 类构造器源码如下：
+
+```python
+def __init__(self, /, node: str, arg: Any) -> None:
+    """
+    Initialize a new instance of the `Send` class.
+
+    Args:
+        node: The name of the target node to send the message to.
+        arg: The state or message to send to the target node.
+    """
+    self.node = node
+    self.arg = arg
+```
+
+该构造器接收两个参数，并记录为实例属性：
+
+- node：待启动的下游节点名称，必须是已在状态图中注册的合法名称
+- arg：传递给下游节点的信息，仅对`node`指向的节点可见，通常应是私有状态。每个 `Send` 实例接收到的 `arg` 是独立的，互不相干
+
+示例如下：
+
+```python
+from typing import TypedDict,Literal,Sequence
+from wsgiref.util import request_uri
+from IPython.core.debugger import prompt
+from langchain_deepseek import ChatDeepSeek
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Send
+from langchain.messages import HumanMessage
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+CONTENT_TYPES = ["poem","joke","ci_poem"]
+
+model = ChatDeepSeek(
+    model="deepseek-v4-flash",
+    extra_body={
+        "thinking": {
+            "type": "disabled"
+        }
+    }
+)
+
+# 1. 定义状态
+# 1.1 全局状态
+class OverAllState(TypedDict):
+    topic: str
+    poem: str
+    ci_poem:str
+    joke: str
+
+# 1.2 私有状态
+class workerState(TypedDict):
+    content_type: Literal["poem","joke","ci_poem"]
+    prompt: str
+
+# 1.3 输入状态
+class inputState(TypedDict):
+    topic: str
+
+# 1.4 输出状态
+class outputState(TypedDict):
+    poem: str
+    ci_poem:str
+    joke: str
+
+# 2. 定义节点
+def worker_node(state:workerState) -> outputState:
+    content_type = state["content_type"]
+    prompt = state["prompt"]
+    content = model.invoke([HumanMessage(prompt)]).content
+    return {
+        content_type: content
+    }
+
+# 3. 定义动态分支的路由
+def router(state:inputState) -> Sequence[Send]:
+    router_prompt = "请生成关于{} 的 {}"
+    english2Chinese = {
+        "poem": "七言绝句",
+        "joke": "笑话",
+        "ci_poem": "中文词"
+    }
+    topic = state["topic"]
+    return [
+        Send(
+            "worker_node",
+            {
+                "content_type": content_type,
+                "prompt": router_prompt.format(topic, english2Chinese[content_type])
+            }
+        )
+        for content_type in CONTENT_TYPES
+    ]
+
+# 4. 构建图
+builder = StateGraph(state_schema=OverAllState,input_schema=inputState,output_schema=outputState)
+
+builder.add_node("worker_node", worker_node)
+builder.add_conditional_edges(
+    START,
+    router,
+    path_map=["worker_node"],
+    )
+
+builder.add_edge("worker_node",END)
+
+graph = builder.compile()
+res = graph.invoke({"topic": "莲花"})
+print(res)
+
+from IPython.display import display
+display(graph)
+```
+
+![14](/images/LangGraph/14.png)
+
+补充说明：如果多个并行任务写入同一个状态字段，通常需要为该字段定义 reducer，用于合并多个任务的输出。本例中三个任务分别写入 **`poem`**、**`ci_poem`**、**`joke`** 三个不同字段，因此不会发生同一字段的并发合并问题
+
+##### 条件分支
+
+**`Command`** 是 **`LangGraph`** 中用于控制图执行的多功能原语，它的构造器可以接受四个参数，并记录在同名类属性中：
+
+- **`update`**：更新图状态，效果等同于节点直接返回状态更新字典
+- **`goto`**：指定节点执行完成后的跳转目标，可用于运行时条件分支。当需要同时更新状态并控制跳转时，比单独使用条件边更合适
+- **`graph`**：存在子图时，用于指定跳转发生在哪一层图中，例如从子图跳转到父图
+- **`resume`**：用于恢复被中断的图执行，常见于 **`human-in-the-loop`** 场景
+
+可以通过 **`Command(goto=...)`** 在节点内部实现条件分支
+
+与 **`add_conditional_edges()`** 相比，**`Command`** 更适合“状态更新”和“控制流跳转”需要放在同一个节点返回值中的场景
+
+例如，一个节点既要更新状态，又要根据当前状态决定下一步跳转目标，就可以返回：
+
+```python
+return Command(
+    update={"foo": "bar"},
+    goto="next_node"
+)
+```
+
+示例如下：
+
+```python
+from typing import TypedDict,Literal,Sequence
+from langchain_deepseek import ChatDeepSeek
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Command
+from langchain.messages import HumanMessage
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+model = ChatDeepSeek(
+    model="deepseek-v4-flash",
+    extra_body={
+        "thinking": {
+            "type": "disabled"
+        }
+    }
+)
+
+# 1. 定义状态
+class OverAllState(TypedDict):
+    topic: str
+    content_type: Literal["poem","joke"]
+    content_Chinese: str
+    poem: str
+    joke: str
+# 2. 定义路由节点
+def router(state:OverAllState) -> Command[Literal["poem_node","joke_node","__end__"]]:
+    if state["content_type"] == "poem":
+        return Command(
+            update={
+                "content_Chinese": "一首诗"
+            },
+            goto="poem_node"
+        )
+    elif state["content_type"] == "joke":
+        return Command(
+            update={
+                "content_Chinese": "一个笑话"
+            },
+            goto="joke_node"
+        )
+    else:
+        return Command(
+            goto=END
+        )
+
+def poem_node(state:OverAllState) -> OverAllState:
+    poem = model.invoke([f"写一首关于{state['topic']}主题的{state['content_Chinese']}"]).content
+    return {
+        "poem": poem
+    }
+
+def joke_node(state:OverAllState) -> OverAllState:
+    joke = model.invoke([f"写一个关于{state['topic']}主题的{state['content_Chinese']}"]).content
+    return {
+        "joke": joke
+    }
+
+# 3. 构建图
+builder = StateGraph(state_schema=OverAllState)
+builder.add_node("router",router)
+builder.add_node("poem_node",poem_node)
+builder.add_node("joke_node",joke_node)
+
+builder.add_edge(START,"router")
+builder.add_edge("poem_node",END)
+builder.add_edge("joke_node",END)
+
+graph = builder.compile()
+
+res1 = graph.invoke({"topic": "莲花","content_type": "poem"})
+print(res1)
+print("="*50)
+res2 = graph.invoke({"topic": "猫咪","content_type": "joke"})
+print(res2)
+res3 = graph.invoke({"topic": "猫咪","content_type": "xxx"})
+print(res3)
+
+from IPython.display import  display
+display(graph)
+```
+
+![15](/images/LangGraph/15.png)
+
+注解不能限制 **`goto`** 在运行时只能写这些值，而是为了让 LangGraph 和类型检查工具知道：这个节点可能跳转到哪些目标。对于图结构渲染来说，这个注解非常重要。如果不声明，渲染出来的图可能无法正确表达 **`router`** 节点的潜在跳转关系
+
+需要注意的是，如果某个节点使用 **`Command(goto=...)`** 控制后续跳转，一般不要再给这个节点额外添加普通下游边。否则，普通边和 **`Command`** 指定的跳转都可能生效，导致多个下游节点被同时触发
+
+因此，本例中只添加：
+
+```python
+builder.add_edge(START, "router")
+```
+
+而不添加类似下面这样的边：
+
+```python
+builder.add_edge("router", "poem_node")
+builder.add_edge("router", "joke_node")
+```
+
+因为 **`router`** 的后续跳转已经由 **`Command(goto=...)`** 决定
+
+##### 小结
+
+动态分支有两类典型应用场景：
+
+| 场景     | 典型 API                                   | 说明                                        |
+| :------- | :----------------------------------------- | :------------------------------------------ |
+| 动态扇出 | **`Send`** + **`add_conditional_edges()`** | 运行时创建多个任务，常用于 **`Map-Reduce`** |
+| 动态跳转 | **`Command(goto=...)`**                    | 节点内部根据状态决定跳转目标                |
+
+二者的区别如下：
+
+- **`Send`** 更强调“一个节点动态分发多个任务实例”
+- **`Command(goto=...)`** 更强调“当前节点执行完后动态跳转到哪个节点”
+
+> **`Send` 解决的是：运行时要启动多少个任务实例。**`Command(goto=...)` 解决的是：当前节点执行完后要去哪里。
+
+不过，无论是 **`Send`** 还是 **`Command(goto=...)`**，目标节点通常都需要提前注册到图中。所谓“动态”，主要是运行时动态决定任务数量、任务输入或跳转路径，而不是运行时临时创建新的节点
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

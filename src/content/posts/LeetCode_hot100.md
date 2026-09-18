@@ -563,6 +563,69 @@ class Solution(object):
 
 
 
+## 题目 007：接雨水 [ 困难 ]
+
+[42. 接雨水 - 力扣（LeetCode）](https://leetcode.cn/problems/trapping-rain-water/description/?envType=study-plan-v2&envId=top-100-liked)
+
+#双指针
+
+### 题目描述
+
+给定 `n` 个非负整数表示每个宽度为 `1` 的柱子的高度图，计算按此排列的柱子，下雨之后能接多少雨水。
+
+### 示例
+
+**示例 1：**
+
+![19](/images/algorithm-LeetCode/19.jpg)
+
+```
+输入：height = [0,1,0,2,1,0,1,3,2,1,2,1]
+输出：6
+解释：上面是由数组 [0,1,0,2,1,0,1,3,2,1,2,1] 表示的高度图，在这种情况下，可以接 6 个单位的雨水（蓝色部分表示雨水）。 
+```
+
+**示例 2：**
+
+```
+输入：height = [4,2,0,3,2,5]
+输出：9
+```
+
+### 提示
+
+- `n == height.length`
+- `1 <= n <= 2 * 104`
+- `0 <= height[i] <= 105`
+
+### 解题思路
+
+1. **法**  
+   - 
+2. **法**  
+   - 
+
+
+### 代码（Python）
+
+
+
+```python
+class Solution(object):
+    def trap(self, height):
+        
+```
+
+
+
+
+
+---
+
+
+
+
+
 ## 题目 008：无重复字符的最长子串 [ 中等 ]
 
 [3. 无重复字符的最长子串 - 力扣（LeetCode）](https://leetcode.cn/problems/longest-substring-without-repeating-characters/description/)
@@ -636,6 +699,70 @@ class Solution(object):
             max_len = max(max_len, right - left + 1)
             
         return max_len
+```
+
+
+
+
+
+---
+
+
+
+
+
+## 题目 009：找到字符串中所有字母异位词 [ 中等 ]
+
+[438. 找到字符串中所有字母异位词 - 力扣（LeetCode）](https://leetcode.cn/problems/find-all-anagrams-in-a-string/description/?envType=study-plan-v2&envId=top-100-liked)
+
+#滑动窗口
+
+### 题目描述
+
+给定两个字符串 `s` 和 `p`，找到 `s` 中所有 `p` 的 **异位词** 的子串，返回这些子串的起始索引。不考虑答案输出的顺序。
+
+### 示例
+
+**示例 1:**
+
+```
+输入: s = "cbaebabacd", p = "abc"
+输出: [0,6]
+解释:
+起始索引等于 0 的子串是 "cba", 它是 "abc" 的异位词。
+起始索引等于 6 的子串是 "bac", 它是 "abc" 的异位词。
+```
+
+ **示例 2:**
+
+```
+输入: s = "abab", p = "ab"
+输出: [0,1,2]
+解释:
+起始索引等于 0 的子串是 "ab", 它是 "ab" 的异位词。
+起始索引等于 1 的子串是 "ba", 它是 "ab" 的异位词。
+起始索引等于 2 的子串是 "ab", 它是 "ab" 的异位词。
+```
+
+### 提示
+
+- `1 <= s.length, p.length <= 3 * 104`
+- `s` 和 `p` 仅包含小写字母
+
+### 解题思路
+
+1. **法**  
+   - 
+2. **法**  
+   - 
+
+
+### 代码（Python）
+
+
+
+```python
+
 ```
 
 
@@ -1103,4 +1230,13 @@ class Solution(object):
 
 ```
 
-1
+
+
+
+
+
+
+---
+
+
+
