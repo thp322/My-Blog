@@ -1,6 +1,6 @@
 ---
 title: FastAPI 从入门到实战
-date: 2026-09-18
+date: 2026-09-19
 tags: [后端, FastAPI, 中间件, ORM]
 description: FastAPI 从简单到入门的教程，涵盖最简单的接口创建、请求参数处理、响应类型，深入讲解中间件原理与应用、依赖注入机制、ORM，以及数据库操作
 ---
@@ -773,10 +773,88 @@ async def startup_event():
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 
+# 创建异步会话工
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,         # 绑定数据库引擎
     class_=AsyncSession,       # 指定会话类
     expire_on_commit=False     # 提交后会话不过期，不会重新查询数据库
+)
+
+# 依赖项，用于获取数据库会话
+async def get_database():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session             # 返回数据库会话给路由处理函数
+            await session.commit()    # 无异常，提交事务
+        except Exception:
+            await session.rollback()  # 有异常，回滚
+            raise
+        finally:
+            await session.close()     # 关闭会话
+            
+# 注入到路由中
+@app.get("/book/books")
+async def get_book_list(db: AsyncSession = Depends(get_database)):
+    # 查询
+    result = await db.execute(select(Book))
+    book = result.scalars().all()
+    return book
+```
+
+##### 完整代码
+
+```python
+from datetime import datetime
+from fastapi import FastAPI, Depends
+from sqlalchemy import DateTime, func, String, Float, select
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+app = FastAPI()
+
+# 1. 创建异步引擎
+ASYNC_DATABASE_URL = "mysql+aiomysql://root:123456@localhost:3306/FastAPI_first?charset=utf8"
+async_engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    echo=True,         # 可选，输出 SQL 日志
+    pool_size=10,      # 设置连接池活跃的连接数
+    max_overflow=20    # 允许额外的连接数
+)
+
+# 2. 定义模型类： 基类 + 表对应的模型类
+# 基类：创建时间、更新时间；书籍表：id、书名、作者、价格、出版社
+class Base(DeclarativeBase):
+    create_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, comment="创建时间")
+    update_time: Mapped[datetime] = mapped_column(DateTime, insert_default=func.now(), default=func.now, onupdate=func.now(), comment="修改时间")
+
+class Book(Base):
+    __tablename__ = "book"
+
+    id: Mapped[int] = mapped_column(primary_key=True, comment="书籍id")
+    bookname: Mapped[str] = mapped_column(String(255), comment="书名")
+    author: Mapped[str] = mapped_column(String(255), comment="作者")
+    price: Mapped[float] = mapped_column(Float, comment="价格")
+    publisher: Mapped[str] = mapped_column(String(255), comment="出版社")
+
+# 3. 建表：定义函数建表 → FastAPI 启动的时候调用建表的函数
+async def create_tables():
+    # 获取异步引擎，创建事务 - 建表
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)  # Base 模型类的元数据创建
+
+@app.on_event("startup")
+async def startup_event():
+    await create_tables()
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+
+# 需求：查询功能的接口，查询图书 → 依赖注入：创建依赖项获取数据库会话 + Depends 注入路由处理函数
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,        # 绑定数据库引擎
+    class_=AsyncSession,      # 指定会话类
+    expire_on_commit=False    # 提交后会话不过期，不会重新查询数据库
 )
 
 # 依赖项
@@ -790,139 +868,295 @@ async def get_database():
             raise
         finally:
             await session.close()     # 关闭会话
+
+@app.get("/book/books")
+async def get_book_list(db: AsyncSession = Depends(get_database)):
+    # 查询
+    result = await db.execute(select(Book))
+    book = result.scalars().all()
+    return book
 ```
 
-#### （4）ORM 查询操作
+### 4、ORM 操作数据
 
-##### 基础查询
+![17](/images/fastapi/17.png)
 
-```python
-# 获取所有记录
-items = db.query(Item).all()
+#### （1）ORM 查询操作
 
-# 获取第一条记录
-item = db.query(Item).first()
-
-# 根据主键获取
-item = db.query(Item).get(1)
-
-# 限制数量
-items = db.query(Item).limit(10).all()
-
-# 排序
-items = db.query(Item).order_by(Item.price).all()
-items = db.query(Item).order_by(Item.price.desc()).all()  # 降序
+```
+核心语句：await db.execute( select(模型类) )，返回一个 ORM 对象
 ```
 
-##### 条件查询
+##### 1) 基础查询
+
+获取所有数据
+
+ `scalars().all()`
+
+获取单条数据 
+
+- `scalars().first() `
+- `get(模型类, 主键值)`
+
+例子：
 
 ```python
-from sqlalchemy import and_, or_, not_
-
-# 等于
-items = db.query(Item).filter(Item.name == "手机").all()
-
-# 不等于
-items = db.query(Item).filter(Item.price != 0).all()
-
-# 大于、小于
-items = db.query(Item).filter(Item.price > 100).all()
-items = db.query(Item).filter(Item.price < 1000).all()
-
-# 大于等于、小于等于
-items = db.query(Item).filter(Item.price >= 100).all()
-items = db.query(Item).filter(Item.price <= 1000).all()
-
-# IN 查询
-items = db.query(Item).filter(Item.name.in_(["手机", "电脑"])).all()
-
-# NOT IN 查询
-items = db.query(Item).filter(~Item.name.in_(["手机", "电脑"])).all()
-
-# IS NULL
-items = db.query(Item).filter(Item.description == None).all()
-
-# IS NOT NULL
-items = db.query(Item).filter(Item.description != None).all()
-
-# AND 条件
-items = db.query(Item).filter(and_(Item.price > 100, Item.price < 1000)).all()
-
-# OR 条件
-items = db.query(Item).filter(or_(Item.name == "手机", Item.name == "电脑")).all()
-
-# NOT 条件
-items = db.query(Item).filter(not_(Item.price == 0)).all()
-```
-
-##### 模糊查询
-
-```python
-from sqlalchemy import like, ilike
-
-# LIKE（区分大小写）
-items = db.query(Item).filter(Item.name.like("%手机%")).all()  # 包含"手机"
-items = db.query(Item).filter(Item.name.like("手机%")).all()   # 以"手机"开头
-items = db.query(Item).filter(Item.name.like("%手机")).all()   # 以"手机"结尾
-
-# ILIKE（不区分大小写）
-items = db.query(Item).filter(Item.name.ilike("%PHONE%")).all()
-```
-
-##### 聚合查询
-
-```python
-from sqlalchemy import func
-
-# COUNT（计数）
-count = db.query(func.count(Item.id)).scalar()
-count = db.query(Item).count()
-
-# SUM（求和）
-total_price = db.query(func.sum(Item.price)).scalar()
-
-# AVG（平均值）
-avg_price = db.query(func.avg(Item.price)).scalar()
-
-# MAX（最大值）
-max_price = db.query(func.max(Item.price)).scalar()
-
-# MIN（最小值）
-min_price = db.query(func.min(Item.price)).scalar()
-
-# GROUP BY（分组）
-from sqlalchemy import GroupBy
-results = db.query(Item.name, func.count(Item.id)).group_by(Item.name).all()
-
-# HAVING（分组过滤）
-results = db.query(Item.name, func.count(Item.id)).group_by(Item.name).having(func.count(Item.id) > 1).all()
-```
-
-##### 分页查询
-
-```python
-from sqlalchemy import desc
-
-def get_items(page: int = 1, page_size: int = 10, db: Session = Depends(get_db)):
-    # 计算偏移量
-    offset = (page - 1) * page_size
-
-    # 查询总数
-    total = db.query(Item).count()
-
-    # 分页查询
-    items = db.query(Item).order_by(desc(Item.id)).offset(offset).limit(page_size).all()
-
+@app.get("/book/books")
+async def get_book_list(db: AsyncSession = Depends(get_database)):
+    
+    # 查询所有数据
+    result = await db.execute(select(Book))
+    book_all = result.scalars().all()
+    
+    # 查询第一条数据
+    result = await db.execute(select(Book))
+    book_first = result.scalars().first()
+    
+    # 根据主键查询数据
+    book_by_id = await db.get(Book, 5)
+    
+    # 限制数量（只取前10条）
+    result = await db.execute(select(Book).limit(10))
+    book_limit = result.scalars().all()
+    
+    # 排序(升序)，按id升序
+    result = await db.execute(select(Book).order_by(Book.id))
+    book_asc = result.scalars().all()
+    
+    # 降序
+    result = await db.execute(select(Book).order_by(Book.id.desc()))
+    book_desc = result.scalars().all()
+    
     return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
+        "all": book_all,
+        "first": book_first,
+        "by_id_5": book_by_id,
+        "limit_10": book_limit,
+        "asc": book_asc,
+        "desc": book_desc
     }
 ```
 
-##### ORM 获取数据总结
+##### 2) 条件查询
+
+```
+核心语法：select(Book).where(条件, 条件2, ...)
+```
+
+条件： 
+
+- 比较判断：==; >; <; >=; <= 等
+- 模糊查询：like() 
+- 与非查询：&; |; ~ 
+- 包含查询：in_()
+- 空值判断：is_(None)` / `isnot(None)
+
+```python
+from sqlalchemy import and_, or_, not_
+from sqlalchemy import like, ilike
+
+@app.get("/book/get_book/{book_id}")
+async def get_book(book_id: int, db: AsyncSession = Depends(get_database)):
+    
+    # ==========比较判断：==; >; <; >=; <= 等==========
+    # 等于
+    result = await db.execute(select(Book).where(Book.id == book_id))
+    book = result.scalar_one_or_none()
+    
+    # 不等于
+    result = await db.execute(select(Book).where(Book.price != 0))
+    books = result.scalars().all()
+    
+    # 大于、小于、大于等于、小于等于
+    result = await db.execute(select(Book).where(Book.price >= 200))
+    books = result.scalars().all()
+    
+    # ==========模糊查询：like() ==========
+    # LIKE（区分大小写）
+    result = await db.execute(select(Book).where(Book.author.like("曹_")))
+    books = result.scalars().all()
+    
+    # ILIKE（不区分大小写）
+	result = await db.execute(select(Book).where(Book.author.ilike("曹_")))
+    books = result.scalars().all()
+    
+    # ==========与非查询：&; |; ~ ==========
+    # 与或非
+    result = await db.execute(select(Book).where((Book.author.like("曹%")) | (Book.price > 100)))
+    books = result.scalars().all()
+    
+    # AND 条件
+    # 写法一：多个 where 条件默认就是 AND
+    result = await db.execute(
+        select(Book).where(Book.price >= 100).where(Book.category == "小说")
+    )
+    books = result.scalars().all()
+    # 写法二：用 and_() 显式连接
+    result = await db.execute(
+        select(Book).where(
+            and_(Book.price >= 100, Book.category == "小说", Book.is_deleted == False)
+        )
+    )
+    books = result.scalars().all()
+    
+    # OR 条件
+    result = await db.execute(
+        select(Book).where(
+            or_(Book.price < 50, Book.category == "折扣书")
+        )
+    )
+    books = result.scalars().all()
+    
+    # NOT 条件
+    # 写法一：
+    result = await db.execute(
+        select(Book).where(not_(Book.is_deleted == True))
+    )
+    # 写法二：
+    result = await db.execute(
+        select(Book).where(Book.is_deleted == False)
+    )
+    # 写法三：
+    result = await db.execute(
+        select(Book).where(~Book.is_deleted)
+    )
+    books = result.scalars().all()
+    
+    # ==========包含查询：in_()==========
+    # IN 查询
+    result = await db.execute(select(Book).where(Book.id.in_([1, 3, 5, 7, 9])))
+    books = result.scalars().all()
+    
+    # NOT IN 查询
+    # 写法一：~Book.id.in_
+    result = await db.execute(select(Book).where(~Book.id.in_([2, 4, 6, 8])))
+    # 写法二：not_() 
+    result = await db.execute(select(Book).where(not_(Book.id.in_([2, 4, 6, 8]))))
+    books = result.scalars().all()
+    
+    # ==========空值判断：is_(None)` / `isnot(None)==========
+    # IS NULL
+    result = await db.execute(select(Book).where(Book.description.is_(None)))
+    books = result.scalars().all()
+    
+    # IS NOT NULL
+    result = await db.execute(select(Book).where(Book.description.isnot(None)))
+    books = result.scalars().all()
+    
+    return book
+```
+
+##### 3) 聚合查询
+
+```
+聚合计算：func.方法(模型类.属性)
+```
+
+- count：统计行数量
+- avg：求平均值 
+- max：求最大值 
+- min：求最小值 
+- sum：求和
+
+```python
+from sqlalchemy import func, select
+
+@app.get("/book/count")
+async def get_count(db: AsyncSession = Depends(get_database)):
+    # 计数
+    res_count = await db.execute(select(func.count(Book.id)))
+    count = res_count.scalar()
+
+    # 平均值 
+    res_avg = await db.execute(select(func.avg(Book.price)))
+    avg_price = res_avg.scalar()
+    
+    # 最大值 
+    res_max = await db.execute(select(func.max(Book.price)))
+    max_price = res_max.scalar()
+    
+    # 最小值 
+    res_min = await db.execute(select(func.min(Book.price)))
+    min_price = res_min.scalar()
+    
+    # 和
+    res_sum = await db.execute(select(func.sum(Book.price)))
+    sum_price = res_sum.scalar()
+    
+    # GROUP BY（分组：按分类统计数量）
+    res_group = await db.execute(
+        select(Book.category, func.count(Book.id)).group_by(Book.category)
+    )
+    group_list = res_group.all()
+    
+    # HAVING（分组过滤：只返回图书数量大于2的分类）
+    res_having = await db.execute(
+        select(Book.category, func.count(Book.id))
+        .group_by(Book.category)
+        .having(func.count(Book.id) > 2)
+    )
+    having_list = res_having.all()
+
+    return {
+        "总数": count,
+        "均价": avg_price,
+        "最高价": max_price,
+        "最低价": min_price,
+        "价格总和": sum_price,
+        "按分类分组统计": group_list,
+        "分组后过滤(数量>2)": having_list
+    }
+```
+
+补充：
+
+- `func.count / func.avg / func.max / func.min / func.sum` 聚合函数，配合 `.scalar()` 获取单个数值
+- **group_by**：分组，select 里面非聚合字段必须放到 group_by
+- having对分组后的结果做过滤（不能用 where，where 是分组前过滤）
+  - where：原始行过滤，不能使用聚合函数
+  - having：分组之后过滤，可以使用聚合函数
+- `.all()` 用于 group_by，因为会返回多行多列（分类 + 数量），不能用 scalar ()
+
+##### 4) 分页查询
+
+```
+分页查询：select().offset().limit()
+```
+
+- offset：跳过的记录数 
+- limit：返回的记录数
+
+| 当前页码 | 每页数量（limit） | 跳过数量(offset) |
+| :------: | :---------------: | :--------------: |
+|    1     |        10         |        0         |
+|    2     |        10         |        10        |
+|    3     |        10         |        20        |
+|    4     |        10         |        30        |
+
+$$
+offset 值 = (当前页码 - 1) * 每页数量 limit
+$$
+
+```python
+@app.get("/book/get_book_list")
+async def get_book_list(
+    page: int = 1,        # 页码
+    page_size: int = 3,   # 每页数据
+    db: AsyncSession = Depends(get_database)
+):
+    # 跳过数量 = （页码 - 1） * 每页数量
+    offset_ = (page - 1) * page_size
+
+    stmt = select(Book).offset(offset_).limit(page_size)
+    result = await db.execute(stmt)
+    books = result.scalars().all()
+    
+    return books
+```
+
+##### 5) 总结
+
+![18](/images/fastapi/18.png)
 
 ```python
 # 基本查询
@@ -946,74 +1180,100 @@ db.query(func.count(Model.id)).scalar()
 db.query(func.sum(Model.field)).scalar()
 ```
 
-#### ORM 新增操作
+#### （2）ORM 新增操作
 
-```python
-# 方式一：创建对象后添加
-new_item = Item(name="新商品", price=99.99)
-db.add(new_item)
-db.commit()
-db.refresh(new_item)  # 刷新以获取生成的 ID
-
-# 方式二：直接添加
-db.add(Item(name="新商品", price=99.99))
-db.commit()
-
-# 批量添加
-items = [
-    Item(name="商品1", price=99.99),
-    Item(name="商品2", price=199.99),
-    Item(name="商品3", price=299.99)
-]
-db.add_all(items)
-db.commit()
+```
+核心步骤：定义 ORM 对象 → 添加对象到事务：add(对象) → commit 提交到数据库
 ```
 
-#### ORM 更新操作
-
 ```python
-# 方式一：先查询后更新
-item = db.query(Item).filter(Item.id == 1).first()
-if item:
-    item.name = "更新后的名称"
-    item.price = 199.99
-    db.commit()
-    db.refresh(item)
+# 需求：用户输入图书信息（id、书名、作者、价格、出版社） → 新增
+# 用户输入 → 参数 → 请求体
+class BookBase(BaseModel):
+    id: int
+    bookname: str
+    author: str
+    price: float
+    publisher: str
 
-# 方式二：批量更新
-db.query(Item).filter(Item.price < 100).update({"price": 100})
-db.commit()
-
-# 方式三：使用 update()
-db.query(Item).filter(Item.id == 1).update({
-    Item.name: "新名称",
-    Item.price: 99.99
-})
-db.commit()
+@app.post("/book/add_book")
+async def add_book(book: BookBase, db: AsyncSession = Depends(get_database)):
+    # ORM对象 → add → commit
+    book_obj = Book(**book.__dict__)
+    db.add(book_obj)
+    await db.commit()
+    
+    return book
 ```
 
-#### ORM 删除操作
+#### （3）ORM 更新操作
 
-```python
-# 方式一：先查询后删除
-item = db.query(Item).filter(Item.id == 1).first()
-if item:
-    db.delete(item)
-    db.commit()
-
-# 方式二：批量删除
-db.query(Item).filter(Item.price == 0).delete()
-db.commit()
-
-# 方式三：使用 delete()
-db.query(Item).filter(Item.id == 1).delete()
-db.commit()
+```
+核心步骤：查询 get → 属性重新赋值 → commit 提交到数据库
 ```
 
-#### ORM 使用注意事项
+```python
+# 需求：修改图书信息：先查再改
+# 设计思路：路径参数书籍 id, 作用是查找；请求体参数, 作用是新数据（书名、作者、价格、出版社）
+class BookUpdate(BaseModel):
+    bookname: str
+    author: str
+    price: float
+    publisher: str
+
+@app.put("/book/update_book/{book_id}")
+async def update_book(book_id: int, data: BookUpdate, db: AsyncSession = Depends(get_database)):
+    # 1. 查找图书
+    db_book = await db.get(Book, book_id)
+
+    # 如果未找到 抛出异常
+    if db_book is None:
+        raise HTTPException(
+            status_code=404,
+            detail="查无此书"
+        )
+
+    # 2. 找到了则修改：重新赋值
+    db_book.bookname = data.bookname
+    db_book.author = data.author
+    db_book.price = data.price
+    db_book.publisher = data.publisher
+
+    # 3. 提交到数据库
+    await db.commit()
+    
+    return db_book
+```
+
+#### （4）ORM 删除操作
+
+```
+核心步骤：查询 get → delete 删除 → commit 提交到数据库
+```
+
+```python
+@app.delete("/book/delete_book/{book_id}")
+async def delete_book(book_id: int, db: AsyncSession = Depends(get_database)):
+    # 先查再删 提交
+    db_book = await db.get(Book, book_id)
+
+    if db_book is None:
+        raise HTTPException(
+            status_code=404,
+            detail="查无此书"
+        )
+
+    await db.delete(db_book)
+    await db.commit()
+    
+    return {"msg": "删除图书成功"}
+```
+
+#### （5）ORM 使用注意事项
 
 1. **提交事务**：增删改操作后必须调用 `commit()` 提交事务
 2. **刷新对象**：新增后使用 `refresh()` 获取生成的 ID
 3. **关闭会话**：使用 `finally` 确保会话被关闭
 4. **防止 SQL 注入**：使用 ORM 参数化查询，避免字符串拼接
 5. **批量操作**：大量数据使用 `bulk_insert_mappings()` 或 `bulk_update_mappings()` 提高性能
+
