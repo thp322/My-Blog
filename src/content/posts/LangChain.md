@@ -1,8 +1,8 @@
 ---
-title: RAG 与 Agent 基础 —— LangChain 开发
+title: LangChain 开发 —— RAG 与 Agent 基础
 date: 2026-09-02
 tags: [RAG, Agent, LangChain]
-description: 讲解大模型落地企业场景下 RAG、Agent 核心概念，以及 LangChain 开发实战教程
+description: 讲解 RAG、Agent 基础概念，以及 LangChain 开发实战教程：本地 ollama 模型部署与云端大模型调用、OpenAI 库的基础使用、提示词工程、LangChain（各类 API、提示词模版、Chain 链、会话记忆、文档加载器、向量存储）与 Agent 智能体
 ---
 
 随着大模型技术快速普及，单纯调用大模型接口已经很难满足企业实际业务诉求。企业需要大模型能够读取内部私有文档、输出业务精准答案，还可以自主拆解并执行复杂业务任务。 RAG 与 Agent 就是解决上述痛点的两大核心方案：**RAG 解决知识来源与回答准确性问题，Agent 解决复杂任务自动化执行问题**。而 LangChain 作为主流开发框架，把这两套能力封装成可落地的工程组件，是大模型应用开发的必备工具。
