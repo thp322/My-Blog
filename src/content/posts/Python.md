@@ -2,7 +2,7 @@
 title: Python3 高级教程
 date: 2026-09-20
 tags: [Python]
-description: 讲解 Python 基础（语法、装饰器、生成器、闭包、高阶函数），Python 并发（多线程/多进程、线程池、进程池、asyncio 协程、GIL锁），CPython 解释器（内存模型、垃圾回收、GIL、内存泄漏/OOM 排查）
+description: 讲解 Python 基础（语法、装饰器、高阶函数、回调、闭包），Python 并发（多线程/多进程、线程池、进程池、asyncio 协程、GIL锁），CPython 解释器（内存模型、垃圾回收、GIL、内存泄漏/OOM 排查）
 ---
 
 Python 是一个高层次的结合了解释性、编译性、互动性和面向对象的脚本语言。本文从最基础的 Python 语法写起，逐步讲解 Python 高级内容，带你彻底掌握 Python 。
@@ -1272,6 +1272,16 @@ print(type(num_int))
 | bin(x)                                     | 将一个整数转换为一个二进制字符串                    |
 | ascii(x)                                   | 返回对象的 ASCII 表示，非 ASCII 字符会被转义        |
 
+
+
+
+
+---
+
+
+
+
+
 ## 五、Docstring 文档字符串
 
 Python 的 Docstring（文档字符串）是一种特殊的注释，用于为函数、类、模块等添加文档说明。它类似于 Java 的 Javadoc，但更加强大和灵活
@@ -1383,7 +1393,17 @@ Python 中有多种 Docstring 风格，常用的有：
 
 建议在项目中选择一种风格并保持一致
 
-### 六、运算符
+
+
+
+
+---
+
+
+
+
+
+## 六、运算符
 
 Python 语言支持以下类型的运算符:
 
@@ -1589,11 +1609,15 @@ print(1 <> 2)
 
 
 
+
+
 ---
 
 
 
-## 六、Python 流程控制语句
+
+
+## 七、Python 流程控制语句
 
 由于本文为 Python 高级教程，本章对于基础语法的使用忽略
 
@@ -2134,11 +2158,22 @@ with tag("h1"):
 
 
 
-## 七、函数进阶用法
-
-### 1、函数基础
+## 八、函数基础到进阶
 
 由于本文为 Python 高级教程，基础语法使用忽略
+
+当把函数名赋值给一个变量的时候，那这个变量就实现了和函数一样的功能
+
+```python
+def test()
+	print("hello world")
+    
+demo = test
+demo()
+# hello world
+```
+
+### 1、函数基础
 
 #### （1）参数传递的可更改(mutable)与不可更改(immutable)对象
 
@@ -2547,6 +2582,341 @@ say_hello()
 - wrapper 才是真正执行的函数
 - 推荐使用 *args, **kwargs 提高通用性
 - 支持函数、类、甚至带参数的装饰器
+
+### 4、高阶函数
+
+#### （1）定义
+
+在 Python 中，函数也是一种对象，可以像普通变量一样被传递。如果一个函数满足以下任意一个条件，我们就称它为**高阶函数**：
+
+1. 接收一个或多个函数作为参数
+2. 将函数作为返回值返回
+
+#### （2）Python 内置的高阶函数
+
+Python 本身提供了很多内置的高阶函数，最常用的有 `map()`、`filter()`、`reduce()` 和 `sorted()`
+
+**`map(func, iterable)`**：对可迭代对象中的每一个元素依次执行 `func`，返回迭代器
+
+```python
+nums = [1, 2, 3, 4, 5]
+
+# 把每个元素平方
+result = map(lambda x: x ** 2, nums)
+print(list(result))   
+# [1, 4, 9, 16, 25]
+```
+
+**`filter(func, iterable)`**：保留 `func` 返回值为 `True` 的元素
+
+```python
+nums = [1, 2, 3, 4, 5, 6]
+
+# 只保留偶数
+result = filter(lambda x: x % 2 == 0, nums)
+print(list(result))  
+# [2, 4, 6]
+```
+
+**`reduce(func, iterable)`**：对元素逐个归约，需要从 `functools` 导入
+
+```python
+from functools import reduce
+
+nums = [1, 2, 3, 4]
+
+# 累加求和：((1+2)+3)+4
+result = reduce(lambda x, y: x + y, nums)
+print(result)         
+# 10
+```
+
+**`sorted(iterable, key=func)`**：通过 `key` 指定排序规则，`key` 接收的就是一个函数
+
+```python
+users = [("Tom", 18), ("Jerry", 22), ("Alice", 16)]
+
+# 按年龄排序
+result = sorted(users, key=lambda u: u[1])
+print(result)         
+# [('Alice', 16), ('Tom', 18), ('Jerry', 22)]
+```
+
+**注意**：`map`、`filter` 返回的是迭代器，用 `list()` 转成列表才能看到全部结果；迭代器用过一次就会耗尽
+
+### 5、回调函数
+
+回调函数：把一个函数（a）作为一个参数传递到另一个函数（b）中去，那么这个函数（a）我们就叫做回调函数
+
+```python
+def add(x, y):
+    print(x + y)
+
+def sub(a, b):
+    print(a - b)
+
+def mul(x, y):
+    print(x * y)
+
+def div(x, y):
+    print(x / y)
+
+# 需求: 封装一个万能函数，传入两个参数，直接实现加减乘除的操作
+def demo(x, y, func):
+    func(x, y)
+
+demo(2, 1, add)
+demo(2, 1, sub)
+demo(2, 1, mul)
+demo(2, 1, div)
+```
+
+**注意**：这里传的是 `add`，而不是 `add()`
+
+- `add` 表示函数本身，是把函数 "交出去"
+- `add()` 表示立刻执行函数并拿到返回值。 我们要的是把函数交给 `demo`，让 `demo` 在内部决定什么时候调用它，所以不能加括号
+
+回调函数在实际开发中非常常见，比如：
+
+- 异步请求完成后执行的处理函数
+- 事件触发时执行的钩子函数（按钮点击、数据加载完成）
+- 框架中传入的排序、过滤、校验函数
+
+它的核心思想是：**把 "做什么" 和 "什么时候做" 解耦**，外层函数负责流程控制，回调函数负责具体业务逻辑
+
+### 6、闭包函数
+
+##### （1）定义
+
+如果一个函数里面嵌套了另一个函数，外部的函数叫做外函数，内部的函数叫内函数
+
+如果在一个外部函数中定义了一个内部函数，并且外部函数的返回值是内部函数，就构成了一个闭包，则这个内部函数就被称为闭包
+
+```python
+def outer():
+    def inner():
+        print('我是闭包函数')
+    return inner      # 注意: 这里返回的是函数体，不是函数的调用
+
+fn = outer()  		  # fn 等价于 inner 函数
+fn()            	  # 相当于调用了 inner 函数
+```
+
+**注意**：`return inner` 不能写成 `return inner()`
+
+##### （2）自由变量
+
+内函数可以直接读取外函数作用域中的变量，这是闭包最核心的特性
+
+```
+def outer1(x):
+    y = 11
+    def inner1():    # 没有传入任何参数，内部函数可以使用外部函数的变量
+        print(x + y)
+    return inner1
+
+fun1 = outer1(7)
+fun1()
+```
+
+这里 `inner1` 中用到的 `x` 和 `y`，既不是局部变量，也不是全局变量，我们称之为**自由变量**—— 它们是在外函数作用域中定义、却被内函数 "捕获" 并长期持有的变量
+
+可以通过 `__code__.co_freevars` 查看一个闭包捕获了哪些自由变量：
+
+```python
+print(fun1.__code__.co_freevars)   
+# ('x', 'y')
+```
+
+##### （3）闭包会保存运行环境
+
+按照一般的理解，`outer1(7)` 执行完之后，它的栈帧就应该被销毁，变量 `x`、`y` 也应该随之消失。但实际上 `fun1()` 还能正常打印 `18`，原因就是：闭包会把外函数的运行环境 "打包带走"
+
+当 `outer1` 返回 `inner1` 时，Python 发现 `inner1` 引用了外函数的变量，就会把这部分变量保存下来，和函数对象绑定在一起。即使外函数已经执行完毕，这部分环境也不会释放，直到闭包对象本身被回收
+
+```python
+fun2 = outer1(100)
+
+fun2()                
+# 111
+fun1()                
+# 18  —— fun1 的环境仍然保留，互不影响
+```
+
+##### （4）nonlocal 关键字
+
+既然内函数能读取外函数的变量，那能不能直接修改呢？
+
+```python
+def outer():
+    num = 10
+    def inner():
+        num += 1      # 报错！UnboundLocalError
+        print(num)
+    return inner
+```
+
+直接运行会报错。这是因为 Python 看到 `num += 1`，会把 `num` 当作 `inner` 的局部变量，但 `num` 还没赋值就参与运算，所以报错
+
+要在内函数中修改外函数的变量，必须使用 `nonlocal` 关键字声明：
+
+```python
+def outer():
+    num = 10
+    def inner():
+        nonlocal num   # 声明 num 不是局部变量，去外层找
+        num += 1
+        print(num)
+    return inner
+
+f = outer()
+f()                # 11
+f()                # 12
+f()                # 13
+```
+
+加上 `nonlocal` 之后，每次调用 `f()` 都会在之前的基础上累加，这就是闭包 "记住状态" 的效果
+
+> **注意**：`nonlocal` 和 `global` 的区别：
+>
+> - `global` 声明的是全局变量
+> - `nonlocal` 声明的是**最近一层外函数**中的变量，而不是全局变量
+
+##### （5）延迟绑定
+
+这是闭包最容易踩的坑：
+
+```python
+def create_funcs():
+    funcs = []
+    for i in range(3):
+        def inner():
+            print(i)
+        funcs.append(inner)
+    return funcs
+
+fs = create_funcs()
+fs[0]()             # 你以为是 0，实际是 2
+fs[1]()             # 2
+fs[2]()             # 2
+```
+
+1. ```python
+   for i in range(3)
+   ```
+
+    循环一共执行 3 次，每次定义一个函数对象 `inner`，放进列表。
+
+2. 所有 `inner` 函数内部引用的变量 `i`，**不是当时 i 的值，而是同一个变量 `i`**（共享同一个变量地址）
+
+3. 循环结束之后，`i` 的值变成了 `2`（range (3) 最后一轮 i=2）
+
+4. 后面调用 `fs[0]()`、`fs[1]()`、`fs[2]()` 的时候，才去读取变量 `i`，此时 i 早就等于 2 了
+
+**解决方案**：在定义闭包的瞬间，把当前的值固定下来。利用默认参数：
+
+```python
+def create_funcs():
+    funcs = []
+    for i in range(3):
+        def inner(x=i):    # x=i 在定义时就把当前值固定下来
+            print(x)
+        funcs.append(inner)
+    return funcs
+
+fs = create_funcs()
+fs[0]()             # 0
+fs[1]()             # 1
+fs[2]()             # 2
+```
+
+##### （6）闭包与装饰器的关系
+
+现在回头看我们之前写的装饰器，就能明白它的底层原理了：
+$$
+装饰器 = 高阶函数 + 闭包
+$$
+
+```python
+def decorator(func):
+    def wrapper(*args, **kwargs):
+        print('前置操作')
+        result = func(*args, **kwargs)   # 捕获了外函数的 func
+        print('后置操作')
+        return result
+    return wrapper                       # 返回闭包
+```
+
+- `decorator` 接收一个函数作为参数 → 这是**高阶函数**
+- `wrapper` 内层函数捕获了外函数的 `func`，并被作为返回值 → 这是**闭包**
+
+所以装饰器并不是什么魔法，它就是高阶函数和闭包的组合应用
+
+### 7、高阶函数、回调函数、闭包的关系
+
+| 概念         | 核心                                                       |
+| ------------ | ---------------------------------------------------------- |
+| **高阶函数** | 接收函数作参数，或返回函数                                 |
+| **回调函数** | 作为参数传入、在内部被调用的函数（高阶函数的一种使用场景） |
+| **闭包**     | 内层函数捕获并记住外层函数的变量环境                       |
+
+
+
+
+
+---
+
+
+
+
+
+## 九、Python 并发编程
+
+### 1、
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 十、CPython 解释器
+
+### 1、
+
+
 
 
 
