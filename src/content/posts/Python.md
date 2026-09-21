@@ -2852,7 +2852,7 @@ def decorator(func):
 
 所以装饰器并不是什么魔法，它就是高阶函数和闭包的组合应用
 
-### 7、高阶函数、回调函数、闭包的关系
+### 7、高阶函数、回调函数、闭包函数的关系
 
 | 概念         | 核心                                                       |
 | ------------ | ---------------------------------------------------------- |
@@ -2872,7 +2872,312 @@ def decorator(func):
 
 ## 九、Python 并发编程
 
-### 1、
+### 1、前言
+
+#### （1）为什么要引入并发编程？
+
+
+
+#### （2）有哪些程序提速的方法？
+
+- 单线程串行：不加改造的程序
+- 多线程并行：threading
+- 多 CPU 并行：multiprocessing
+- 多机器并行：hadoop / hive / spark
+
+#### （3）Python 对并发编程的支持：
+
+- 多线程：threading，利用 CPU 和 IO 可以同时执行的原理，让 CPU 不会干巴巴等待 IO 完成
+- 多进程：multiprocessing，利用多核 CPU 的能力，真正的并行执行任务
+- 异步 IO ：asyncio，在单线程利用 CPU 和 IO 同时执行的原理，实现函数异步执行
+- 使用 LOCK 对资源加锁，防止冲突访问
+- 使用 Queue 实现不同线程 / 进程之间的数据通信，实现生产者-消费者模式
+- 使用线程池 Pool / 进程池 Pool，简化线程 / 进程的任务提交、等待结束、获取结果
+- 使用 subprocess 启动外部程序的进程，并进行输入输出交互
+
+#### （4）什么是 CPU 密集型计算、IO 密集型计算？
+
+##### 1） CPU 密集型（CPU-bound）
+
+CPU 密集型也叫计算密集型，是指 I/O 在很短的时间就可以完成，CPU 需要大量的计算和处理，特点是 CPU 占用率相当高 
+
+例如：压缩解压缩、加密解密、正则表达式搜索
+
+##### 2）IO 密集型（I / O bound）
+
+IO 密集型指的是系统运作大部分的状况是 CPU 在等 I/O (硬盘 / 内存) 的读 / 写操作，CPU 占用率仍然较低 
+
+例如：文件处理程序、网络爬虫程序、读写数据库程序
+
+#### （5）多线程、多进程和多协程对比
+
+- 多进程 Process
+- 多线程 Thread
+- 多协程 Coroutine
+
+|        | 优点                           | 缺点                                                         | 适用场景                                              |
+| ------ | ------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- |
+| 多进程 | 可以利用多核 CPU 并行运算      | 占用资源最多、可启动数目比线程少                             | CPU 密集型计算                                        |
+| 多线程 | 相比进程，更轻量级、占用资源少 | 相比进程：多线程只能并发执行，不能利用多 CPU（GIL） 相比协程：启动数目有限制，占用内存资源，有线程切换开销 | IO 密集型计算、同时运行的任务数目要求不多             |
+| 多协程 | 内存开销最少、启动协程数量最多 | 支持的库有限制（aiohttp vs requests）、代码实现复杂          | IO 密集型计算、需要超多任务运行、但有现成库支持的场景 |
+
+- 一个进程中可以启动 N 个线程
+- 一个线程中可以启动 N 个协程
+
+#### （6）怎么选择多线程、多进程和多协程？
+
+![8](/images/Python/8.png)
+
+### 2、GIL（全局解释器锁）
+
+#### （1）Python 速度慢的两大原因
+
+在一些特殊的场景下，Python 比 C++ 慢 100 - 200 倍
+
+由于速度慢的原因，很多公司的基础架构代码依然用 C/C++ 开发，比如各大公司阿里 / 腾讯 / 快手的推荐引擎、搜索引擎、存储引擎等底层对性能要求高的模块
+
+- 原因 1：动态类型语言，边解释边执行
+- 原因 2：GIL，无法利用多核 CPU 并发执行
+
+#### （2）GIL 是什么？
+
+全局解释器锁（英语：Global Interpreter Lock，缩写 GIL），是计算机程序设计语言解释器用于同步线程的一种机制，它使得任何时刻仅有一个线程在执行。 即便在多核心处理器上，使用 GIL 的解释器也只允许同一时间执行一个线程
+
+- When a thread is running, it holds the GIL：当一个线程正在运行时，它持有 GIL（全局解释器锁）
+- GIL released on I/O (read,write,send,recv,etc.)：在发生 I / O 操作（读、写、发送、接收等）时，GIL 会被释放
+
+由于 GIL 的存在，即使电脑有多核 CPU，单个时刻也只能使用1个，相比并发加速的 C++ / JAVA 所以慢
+
+#### （3）为什么有 GIL 这个东西？
+
+简而言之：Python 设计初期，为了规避并发问题引入了 GIL，现在想去除却去不掉了！
+
+为了解决多线程之间数据完整性和状态同步问题：
+
+Python 中对象的管理，是使用引用计数器进行的，引用数为 0 则释放对象
+
+假如线程 A 和线程 B 都引用了对象 obj，obj.ref_num = 2，线程 A 和 B 都想撤销对 obj 的引用
+
+![9](/images/Python/9.png)
+
+GIL 确实有好处： 简化了 Python 对共享资源的管理
+
+#### （4）怎么规避 GIL 带来的限制？
+
+##### 1）多线程 threading 机制依然是有用的，用于 IO 密集型计算 
+
+因为在 I/O (read,write,send,recv,etc.) 期间，线程会释放 GIL，实现 CPU 和 IO 的并行 因此多线程用于 IO 密集型计算依然可以大幅提升速度 
+
+但是多线程用于 CPU 密集型计算时，只会更加拖慢速度
+
+##### 2）使用 multiprocessing 的多进程机制实现并行计算、利用多核 CPU 优势 
+
+为了应对 GIL 的问题，Python 提供了 multiprocessing
+
+### 3、使用多线程
+
+#### （1）Python 创建多线程的方法
+
+1. 准备一个函数
+2. 创建一个线程
+3. 启动线程
+4. 等待结束
+
+```python
+# 1、准备一个函数
+def my_func(a, b):
+    do_craw(a, b)
+
+# 2、创建一个线程
+import threading
+t = threading.Thread(target=my_func, args=(100, 200))
+
+# 3、启动线程
+t.start()
+
+# 4、等待结束
+t.join()
+```
+
+#### （2）改写爬虫程序，变成多线程爬取
+
+```python
+import requests
+import threading
+import time
+
+
+urls = [
+    f"https://www.cnblogs.com/#p{page}"
+    for page in range(1, 51)
+]
+
+def crawl(url):
+    r = requests.get(url)
+    print(url, len(r.text))
+
+def single_spider():
+    print("single_spider begin")
+    for url in urls:
+        crawl(url)
+    print("single_spider end")
+
+def multi_spider():
+    print("multi_spider begin")
+    threads = []
+    for url in urls:
+        threads.append(
+            threading.Thread(target=crawl, args=(url,))
+        )
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    print("multi_spider end")
+
+if __name__ == '__main__':
+    start = time.time()
+    single_spider()
+    end = time.time()
+    print("single_spider cost", end - start, " seconds")
+
+    start = time.time()
+    multi_spider()
+    end = time.time()
+    print("multi_spider cost", end - start, " seconds")
+"""
+single_spider end
+single_spider cost 19.06782579421997  seconds
+
+multi_spider end
+multi_spider cost 0.66741943359375  seconds
+"""
+```
+
+可以看到，多线程加速的效果非常明显
+
+### 4、实战：实现生产者消费者爬虫
+
+#### （1）多组件的 Pipeline 技术架构 
+
+复杂的事情一般都不会一下子做完，而是会分很多中间步骤一步一步完成，降低整体复杂度
+
+![10](/images/Python/10.png)
+
+#### （2）生产者消费者爬虫的架构 
+
+![11](/images/Python/11.png)
+
+#### （3）多线程数据通信的 queue.Queue 
+
+queue.Queue 可以用于多线程之间的、线程安全的数据通信
+
+使用流程：
+
+1. 导入类库 
+2. 创建 Queue
+3. 添加元素
+4. 获取元素
+5. 查询状态
+
+```python
+# 1、导入类库
+import queue
+
+# 2、创建Queue
+q = queue.Queue()
+
+# 3、添加元素，阻塞性
+q.put(item)
+
+# 4、获取元素，阻塞性
+item = q.get()
+
+# 5、查询状态
+# 查看元素的多少
+q.qsize()
+# 判断是否为空
+q.empty()
+# 判断是否已满
+q.full()
+```
+
+#### （4）代码编写实现生产者消费者爬虫
+
+##### 1）blog_spider.py
+
+```python
+import requests
+from bs4 import BeautifulSoup
+
+
+urls = [
+    f"https://www.cnblogs.com/#p{page}"
+    for page in range(1, 51)
+]
+
+def crawl(url):
+    r = requests.get(url)
+    return r.text
+
+def parse(html):
+    # post-item-title
+    soup = BeautifulSoup(html, 'html.parser')
+    links = soup.find_all('a', class_='post-item-title')
+    return [(link["href"], link.get_text()) for link in links]
+```
+
+##### 2）producer_consumer_spider.py
+
+```python
+import queue
+import blog_spider
+import time
+import random
+import threading
+
+
+def do_crawl(url_queue: queue.Queue, html_queue: queue.Queue):
+    while True:
+        url = url_queue.get()
+        html = blog_spider.crawl(url)
+        html_queue.put(html)
+        print(threading.current_thread().name, f"craw {url}", "url_queue.size=", url_queue.qsize())
+        time.sleep(random.randint(1,2))
+
+def do_parse(html_queue: queue.Queue, fout):
+    while True:
+        html = html_queue.get()
+        results = blog_spider.parse(html)
+        for result in results:
+            fout.write(str(result) + "\n")
+        print(threading.current_thread().name, f"results.size", len(results), "html_queue.size=", html_queue.qsize())
+        time.sleep(random.randint(1,2))
+
+
+if __name__ == '__main__':
+    url_queue = queue.Queue()
+    html_queue = queue.Queue()
+    for url in blog_spider.urls:
+        url_queue.put(url)
+
+    for idx in range(3):
+        t = threading.Thread(target=do_crawl, args=(url_queue, html_queue), name=f"craw {idx}")
+        t.start()
+
+    fout = open("data.txt", "w")
+    for idx in range(2):
+        t = threading.Thread(target=do_parse, args=(html_queue, fout), name=f"parse {idx}")
+        t.start()
+```
+
+![12](/images/Python/12.png)
+
+### 5、Python 线程安全问题
+
+
+
+
 
 
 
