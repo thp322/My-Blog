@@ -2895,7 +2895,9 @@ def decorator(func):
 - 使用线程池 Pool / 进程池 Pool，简化线程 / 进程的任务提交、等待结束、获取结果
 - 使用 subprocess 启动外部程序的进程，并进行输入输出交互
 
-#### （4）什么是 CPU 密集型计算、IO 密集型计算？
+### 2、如何选择多线程、多进程、多协程
+
+#### （1）什么是 CPU 密集型计算、IO 密集型计算？
 
 ##### 1） CPU 密集型（CPU-bound）
 
@@ -2909,7 +2911,7 @@ IO 密集型指的是系统运作大部分的状况是 CPU 在等 I/O (硬盘 / 
 
 例如：文件处理程序、网络爬虫程序、读写数据库程序
 
-#### （5）多线程、多进程和多协程对比
+#### （2）多线程、多进程和多协程对比
 
 - 多进程 Process
 - 多线程 Thread
@@ -2924,11 +2926,11 @@ IO 密集型指的是系统运作大部分的状况是 CPU 在等 I/O (硬盘 / 
 - 一个进程中可以启动 N 个线程
 - 一个线程中可以启动 N 个协程
 
-#### （6）怎么选择多线程、多进程和多协程？
+#### （3）怎么选择多线程、多进程和多协程？
 
 ![8](/images/Python/8.png)
 
-### 2、GIL（全局解释器锁）
+### 3、GIL（全局解释器锁）
 
 #### （1）Python 速度慢的两大原因
 
@@ -2974,7 +2976,7 @@ GIL 确实有好处： 简化了 Python 对共享资源的管理
 
 为了应对 GIL 的问题，Python 提供了 multiprocessing
 
-### 3、使用多线程
+### 4、使用多线程
 
 #### （1）Python 创建多线程的方法
 
@@ -3056,7 +3058,7 @@ multi_spider cost 0.66741943359375  seconds
 
 可以看到，多线程加速的效果非常明显
 
-### 4、实战：实现生产者消费者爬虫
+### 5、实战：实现生产者消费者爬虫
 
 #### （1）多组件的 Pipeline 技术架构 
 
@@ -3173,11 +3175,456 @@ if __name__ == '__main__':
 
 ![12](/images/Python/12.png)
 
-### 5、Python 线程安全问题
+### 6、Python 线程安全问题
+
+#### （1）线程安全概念
+
+线程安全指某个函数、函数库在多线程环境中被调用时，能够正确地处理多个线程之间的共享变量，使程序功能正确完成
+
+由于线程的执行随时会发生切换，就造成了不可预料的结果，出现线程不安全
+
+```python
+def draw(account, amount):
+    if account.balance >= amount:
+        account.balance -= amount
+```
+
+![13](/images/Python/13.png)
+
+```python
+import threading
+
+class Account:
+    def __init__(self, balance):
+        self.balance = balance
+
+def draw(account, amount):
+    if account.balance >= amount:
+        print(threading.current_thread().name,
+              "取钱成功")
+        account.balance -= amount
+        print(threading.current_thread().name,
+              "余额", account.balance)
+    else:
+        print(threading.current_thread().name,
+              "取钱失败，余额不足")
+
+if __name__ == "__main__":
+    account = Account(1000)
+    ta = threading.Thread(name="ta", target=draw, args=(account, 800))
+    tb = threading.Thread(name="tb", target=draw, args=(account, 800))
+
+    ta.start()
+    tb.start()
+```
+
+以上这个例子中，多次运行会出现下面两种情况：
+
+```
+ta 取钱成功
+ta 余额 200
+tb 取钱失败，余额不足
+```
+
+```
+ta 取钱成功
+ta 余额 200
+tb 取钱成功
+tb 余额 -600
+```
+
+这说明只要线程1 进入 `if` 而没有执行减法时切换线程，线程 2 进入 `if` 就会出问题，但这个问题不是一定会触发，没有出现问题的时候就会输出第一种结果。我们在 `if account.balance >= amount:` 下添加 `time.sleep` ，可以 100% 触发问题：
+
+```
+ta 取钱成功
+ta 余额 200
+tb 取钱成功
+tb 余额 -600
+```
+
+#### （2）Lock 用于解决线程安全问题
+
+##### 1）用法 1 try-finally 模式
+
+```python
+import threading
+
+lock = threading.Lock()
+
+lock.acquire()
+try:
+    # do something
+finally:
+    lock.release()
+```
+
+##### 2）用法 2：with 模式
+
+```python
+import threading
+
+lock = threading.Lock()
+
+with lock:
+    # do something
+```
+
+#### （3）实例代码演示
+
+```python
+# with 模式解决例子中的线程安全问题
+
+import threading
+import time
+
+lock = threading.Lock()
+
+class Account:
+    def __init__(self, balance):
+        self.balance = balance
+
+def draw(account, amount):
+    with lock:
+        if account.balance >= amount:
+            time.sleep(0.1)
+            print(threading.current_thread().name,
+                  "取钱成功")
+            account.balance -= amount
+            print(threading.current_thread().name,
+                  "余额", account.balance)
+        else:
+            print(threading.current_thread().name,
+                  "取钱失败，余额不足")
 
 
+if __name__ == "__main__":
+    account = Account(1000)
+    ta = threading.Thread(name="ta", target=draw, args=(account, 800))
+    tb = threading.Thread(name="tb", target=draw, args=(account, 800))
+
+    ta.start()
+    tb.start()
+```
+
+此时不管运行多少次都不会出现第二种的输出结果
+
+### 7、线程池
+
+#### （1）线程池原理
+
+![14](/images/Python/14.png)
+
+新建线程系统需要分配资源、终止线程系统需要回收资源 如果可以重用线程，则可以减去新建 / 终止的开销
+
+这就是**线程池**的设计初衷，复用线程，避免频繁创建销毁线程带来的性能损耗
+
+![15](/images/Python/15.png)
+
+#### （2）使用线程池的好处
+
+1. 提升性能：因为减去了大量新建、终止线程的开销，重用了线程资源
+2. 适用场景：适合处理突发性大量请求或需要大量线程完成任务、但实际任务处理时间较短
+3. 防御功能：能有效避免系统因为创建线程过多，而导致系统负荷过大相应变慢等问题
+4. 代码优势：使用线程池的语法比自己新建线程执行线程更加简洁
+
+#### （3）ThreadPoolExecutor 使用语法
+
+```python
+from concurrent.futures import ThreadPoolExecutor, as_completed
+```
+
+##### 1）用法 1：map 函数，很简单
+
+```python
+with ThreadPoolExecutor() as pool:
+
+    results = pool.map(craw, urls)
+
+    for result in results:
+        print(result)
+```
+
+注意：map 的结果和入参是顺序对应的，result 会挨个返回对应的 url 结果
+
+##### 2）用法 2：future 模式，更强大
+
+```python
+with ThreadPoolExecutor() as pool:
+
+    futures = [ pool.submit(craw, url)
+                for url in urls ]
+
+    # 第一种写法
+    for future in futures:
+        print(future.result())
+        
+    # 第二种写法
+    # 好处：对比 map 函数方法（result 会挨个返回对应的 url 结果），该写法实现先执行完的任务先返回
+    for future in as_completed(futures):
+        print(future.result())
+```
+
+注意：如果用 as_completed 顺序是不定的
+
+#### （4）使用线程池改造爬虫程序
+
+```python
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import blog_spider
+
+with concurrent.futures.ThreadPoolExecutor() as pool:
+    htmls = pool.map(blog_spider.crawl, blog_spider.urls)
+    htmls = list(zip(blog_spider.urls, htmls))
+    for url, html in htmls:
+        print(url, len(html))
+print("craw over")
+
+with concurrent.futures.ThreadPoolExecutor() as pool:
+    futures = {}
+    for url, html in htmls:
+        future = pool.submit(blog_spider.parse, html)
+        futures[future] = url
+
+    # 第一种写法
+    # for future,url in futures.items():
+    #     print(url, future.result())
+
+    # 第二种写法
+    for future in concurrent.futures.as_completed(futures):
+        url = futures[future]
+        print(url, future.result())
+print("future over")
+```
+
+### 8、在 Web 服务中使用线程池加速
+
+#### （1）Web 服务架构以及特点
+
+![16](/images/Python/16.png)
+
+Web 后台服务的特点： 
+
+- Web 服务对响应时间要求非常高，比如要求 200ms 返回 
+- Web 服务有大量的依赖 IO 操作的调用，比如磁盘文件、数据库、远程 API 
+- Web 服务经常需要处理几万人、几百万人的同时请求
+
+#### （2）使用线程池 ThreadPoolExecutor 加速
+
+使用线程池 ThreadPoolExecutor 的好处： 
+
+- 方便的将磁盘文件、数据库、远程 API 的 IO 调用并发执行 
+- 线程池的线程数目不会无限创建（导致系统挂掉），具有防御功能
+
+#### （3）用 Flask 搭建 Web 服务并实现加速
+
+下面的例子中，我们用 Flask 框架搭建起了一个简单的 Web 框架，用 `time.sleep` 模拟 I / O 操作
+
+```python
+import flask
+import json
+import time
+
+app = flask.Flask(__name__)
+
+def read_file():
+    time.sleep(0.1)
+    return "file result"
+
+def read_db():
+    time.sleep(0.2)
+    return "db result"
+
+def read_api():
+    time.sleep(0.3)
+    return "api result"
+
+@app.route("/")
+def index():
+    result_file = read_file()
+    result_db = read_db()
+    result_api = read_api()
+
+    return json.dumps({
+        "result_file": result_file,
+        "result_db": result_db,
+        "result_api": result_api,
+    })
+
+if __name__ == "__main__":
+    app.run()
+```
+
+请求响应的时间为 0.1 s + 0.2 s + 0.3 s + 程序框架耗费时间，至少花费 600 ms，我们可以用 Postman 请求网址，查看实际花费时间：
+
+![17](/images/Python/17.png)
+
+可以看到，总花费时间为 **608 ms**，接下来我们用 ThreadPoolExecutor 加速：
+
+```python
+import flask
+import json
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+app = flask.Flask(__name__)
+pool = ThreadPoolExecutor()
+
+def read_file():
+    time.sleep(0.1)
+    return "file result"
+
+def read_db():
+    time.sleep(0.2)
+    return "db result"
+
+def read_api():
+    time.sleep(0.3)
+    return "api result"
+
+@app.route("/")
+def index():
+    # future 对象
+    result_file = pool.submit(read_file)
+    result_db = pool.submit(read_db)
+    result_api = pool.submit(read_api)
 
 
+    return json.dumps({
+        "result_file": result_file.result(),
+        "result_db": result_db.result(),
+        "result_api": result_api.result(),
+    })
+
+if __name__ == "__main__":
+    app.run()
+```
+
+![18](/images/Python/18.png)
+
+可以看到，花费的时间从 **608 ms** 降低到了 **305 ms**，这是因为三个函数同时并行，花费的时间是由最长时间 `read_api` 的 300 ms 加上程序框架耗费的时间来决定
+
+### 9、使用多进程 multiprocessing 加速程序的运行
+
+#### （1）有了多线程为啥还要用多进程？
+
+如果遇到了 CPU 密集型计算，多线程反而会降低执行速度！
+
+虽然有全局解释器锁 GIL，但是因为有 IO 的存在，多线程依然可以加速运行
+
+![19](/images/Python/19.png)
+
+CPU 密集型计算，线程的自动切换反而变成了负担，多线程甚至减慢了运行速度
+
+![20](/images/Python/20.png)
+
+multiprocessing 模块就是 python 为了解决 GIL 缺陷引入的一个模块，原理是用多进程在多核 CPU 上并行执行
+
+#### （2）多进程知识梳理
+
+![21](/images/Python/21.png)
+
+#### （3）单线程、多线程、多进程对比 CPU 密集计算速度
+
+CPU 密集型计算：100 次 “判断大数字是否是素数” 的计算
+
+![22](/images/Python/22.png)
+
+由于 GIL 的存在，多线程比单线程计算的还慢，而多进程可以明显加快执行速度
+
+```python
+import math
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import time
+
+PRIMES = [112272535095293] * 100
+
+def is_prime(n):
+    if n < 2:
+        return False
+    if n == 2:
+        return True
+    if n % 2 == 0:
+        return False
+    sqrt_n = int(math.floor(math.sqrt(n)))
+    for i in range(3, sqrt_n + 1, 2):
+        if n % i == 0:
+            return False
+    return True
+
+def single_thread():
+    for number in PRIMES:
+        is_prime(number)
+
+def multi_thread():
+    with ThreadPoolExecutor() as pool:
+        pool.map(is_prime, PRIMES)
+
+def multi_process():
+    with ProcessPoolExecutor() as pool:
+        pool.map(is_prime, PRIMES)
+
+if __name__ == '__main__':
+    start = time.time()
+    single_thread()
+    end = time.time()
+    print("single_thread cost: ", end - start, " seconds")
+
+    start = time.time()
+    multi_thread()
+    end = time.time()
+    print("multi_thread cost: ", end - start, " seconds")
+
+    start = time.time()
+    multi_process()
+    end = time.time()
+    print("multi_process cost: ", end - start, " seconds")
+```
+
+```
+single_thread cost:  21.561853170394897 seconds
+multi_thread cost:  21.167113780975342 seconds
+multi_process cost:  4.928356647491455 seconds
+```
+
+### 10、在 Flask 服务中使用进程池加速
+
+```python
+import flask
+from concurrent.futures import ProcessPoolExecutor
+import math
+import json
+
+process_pool = ProcessPoolExecutor()
+app = flask.Flask(__name__)
+
+def is_prime(n):
+    if n < 2:
+        return False
+    if n == 2:
+        return True
+    if n % 2 == 0:
+        return False
+    sqrt_n = int(math.floor(math.sqrt(n)))
+    for i in range(3, sqrt_n + 1, 2):
+        if n % i == 0:
+            return False
+    return True
+
+@app.route("/is_prime/<numbers>")
+def api_is_prime(numbers):
+    number_list = [int(x) for x in numbers.split(",")]
+    results = process_pool.map(is_prime, number_list)
+    return json.dumps(dict(zip(number_list, results)))
+
+app.run()
+```
+
+```
+cur http://127.0.0.1:5000/is_prime/10,20,30,40
+
+# {"10": false, "20": false, "30": false, "40": false}
+```
 
 
 
