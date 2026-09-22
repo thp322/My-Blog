@@ -3584,9 +3584,9 @@ IO 密集型指的是系统运作大部分的状况是 CPU 在等 I/O (硬盘 / 
 
 #### （2）多线程、多进程和多协程对比
 
-- 多进程 Process
-- 多线程 Thread
-- 多协程 Coroutine
+- 多进程 Process（multiprocessing）
+- 多线程 Thread（threading）
+- 多协程 Coroutine（asyncio）
 
 |        | 优点                           | 缺点                                                         | 适用场景                                              |
 | ------ | ------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- |
@@ -4798,29 +4798,238 @@ free_list 有容量上限，满了之后再销毁对象就直接释放
 
 ### 4、GIL 全局解释器锁
 
+在前面第九章并发编程中，我们发现一个很反直觉的现象：**多线程在 CPU 密集型任务中，并不能利用多核 CPU 加速**。而这个现象的根源，就是 CPython 解释器的 GIL（Global Interpreter Lock，全局解释器锁）
 
+GIL 是 CPython 解释器独有的机制，PyPy、Jython 等其他 Python 解释器没有 GIL 锁
 
+#### （1）GIL 是什么
 
+GIL 本质上是一把**互斥锁**，它保护 CPython 虚拟机的字节码执行。规则非常简单： **任何时刻，同一个进程内，只能有一个线程拿到 GIL，执行 Python 字节码**
 
+哪怕你的机器是多核 CPU，同一个 Python 进程里的多个线程，也无法真正并行执行 Python 字节码，只能交替并发执行
 
+GIL 锁保护的对象：
 
+1. `PyObject` 对象引用计数（就是我们内存模型章节里的`ob_refcnt`）
+2. CPython 虚拟机内部全局状态
+3. refchain 双向链表等全局对象集合
 
+> 诞生背景：早期开发 CPython 时，为了降低 C 扩展开发难度、简化内存对象并发安全问题，引入了 GIL。如果没有 GIL，开发者在写 C 扩展时，需要自己处理大量复杂的多线程锁竞争问题
 
+#### （2）GIL 的工作原理与释放时机
 
+1. **IO 阻塞时主动释放** 当线程遇到 IO 等待（网络请求、文件读写、sleep），会主动释放 GIL。IO 等待期间，其他线程可以获取 GIL 运行。这也是 **IO 密集型场景，多线程依然可以提升效率**的根本原因
 
+2. **时间片计数释放（CPU 密集场景）** Python 设置了一个字节码执行计数器，线程每执行固定数量的字节码（Python3 默认是 100 条），就主动释放 GIL，触发线程竞争
 
+   注意：这里只是切换线程，**不是并行**，多个线程轮流抢锁，单核交替运行
 
+3. C 扩展调用阻塞时： 如果调用耗时的 C 扩展函数（比如一些计算库），C 代码可以手动释放 GIL；如果 C 代码没有释放，会一直占用 GIL 直到执行完成
 
+#### （3）GIL 对多线程 / 多进程 / 协程的影响
 
+1. 多线程
 
+   - IO 密集：GIL 会在 IO 等待释放，多线程有效，并发提速
+   - CPU 密集：同一时刻只能一个线程执行字节码，无法多核并行，多线程没有加速效果，锁竞争还会带来额外开销
+
+2. 多进程
+
+   不受 GIL 限制，每个进程拥有独立 CPython 解释器、独立 GIL。多个进程可以跑在多个 CPU 核心上，实现真正并行
+
+   > 代价：进程创建开销大，进程间内存隔离，通信成本高
+
+3. **asyncio 协程** 
+
+   协程是单线程内的用户态调度，**依然受 GIL 约束**。优势：没有线程切换开销，IO 场景并发能力更强；但 CPU 密集任务下，协程同样无法利用多核
+
+> 选型回顾（见第九章）：
+>
+> - IO 密集：多线程 /asyncio 协程
+> - CPU 密集：必须使用多进程，绕开 GIL 限制
+
+#### （4）GIL 的常见误区
+
+误区 1：GIL 是 Python 语言的特性 
+
+纠正：只是 CPython 解释器的实现机制，不属于 Python 语法本身。PyPy、Jython 没有 GIL
+
+误区 2：GIL 会导致 Python 多线程完全没用 
+
+纠正：IO 密集场景下 GIL 会释放，多线程可以正常并发处理 IO 任务，爬虫、接口请求场景大量使用
+
+误区 3：GIL 锁保护 Python 代码里所有变量 
+
+纠正：GIL 只保护**字节码执行层面**，不等于线程安全。即使有 GIL，多个线程修改同一个可变对象依然会出现数据竞争问题。GIL ≠ 业务代码锁
+
+```python
+import threading
+
+num = 0
+def add():
+    global num
+    for _ in range(100000):
+        num += 1
+
+t1 = threading.Thread(target=add)
+t2 = threading.Thread(target=add)
+t1.start()
+t2.start()
+t1.join()
+t2.join()
+print(num)      # 结果大概率小于200000，出现竞态
+```
+
+`num +=1` 不是原子操作，会拆成多条字节码，GIL 会在字节码之间切换，最终引发数据错乱。GIL 无法解决这个问题，业务代码仍然需要手动加`threading.Lock`
+
+误区 4：GIL 会在函数执行完才释放 
+
+纠正：达到字节码计数或者遇到 IO 阻塞就会释放，函数没执行完也可以交出 GIL
+
+#### （5）小结
+
+GIL 是 CPython 历史遗留设计，它不是 bug，是为了简化 C 扩展开发、保护解释器全局状态
+
+- IO 密集任务：GIL 影响很小，多线程、协程都适用
+- CPU 密集任务：多线程无法多核并行，解决方案是多进程
+- GIL ≠ 业务锁，GIL 存在不代表你的多线程代码天然线程安全
+
+GIL 是 CPython 内存模型、并发编程的交汇点，理解 GIL 之后，我们就可以进入下一节：内存泄漏与 OOM 排查实战
 
 ### 5、内存泄漏与 OOM 排查
 
+理论上：**正常代码执行完毕后，引用会自动释放，GC 会自动回收垃圾对象，内存不会持续上涨**
 
+GC = Garbage Collection（垃圾回收），是 CPython 自动清理无效对象、释放内存的垃圾回收机制，是解决内存堆积、避免 OOM 的核心底层能力
 
+但在实际项目、爬虫、Web 服务、长轮询、后台常驻程序中，我们经常遇到：**程序越跑越卡、内存持续上涨、不释放、最终被系统杀死（OOM）**
 
+#### （1）什么是 Python 内存泄漏
 
+在 C/C++ 中，内存泄漏通常是：手动开辟内存未释放
 
+而在 Python 中定义完全不同：
+
+Python 内存泄漏：程序逻辑导致本该销毁的对象，仍然被持有引用，GC 无法回收，内存只增不减，持续堆积
+
+#### （2）Python 内存泄漏四大核心成因
+
+##### 1）长生命周期容器持有短生命周期对象
+
+```python
+# 全局容器无限堆积
+global_list = []
+
+def task():
+    # 每次任务产生临时对象，但被全局容器持有
+    data = [i for i in range(10000)]
+    global_list.append(data)
+
+# 多次调用后，内存只涨不跌，永远无法被 GC 回收
+for _ in range(100):
+    task()
+```
+
+`global_list` 生命周期和程序一致，只要程序不重启，内部所有对象永久存活
+
+##### 2）循环引用 
+
+前面垃圾回收章节我们讲过：标记清除可以解决循环引用
+
+但是存在**例外情况**：
+
+如果循环引用的对象中，存在 `__del__` 析构方法，CPython 垃圾回收器**无法确定销毁顺序**，会直接放弃回收，造成永久内存泄漏
+
+##### 3）线程常驻
+
+后台线程、守护线程、循环线程异常卡住，线程不销毁，线程栈上的所有对象永久持有，无法释放
+
+##### 4）C 扩展 / 第三方库内存泄漏
+
+numpy、opencv、底层 C 扩展手动申请内存，**不受 Python GC 管控**，Python GC 只能管 PyObject，管不了 C 层内存
+
+这也是很多数据分析、图像处理项目莫名 OOM 的根源
+
+#### （3）什么是 OOM？为什么会 OOM？
+
+**OOM（Out Of Memory）**：进程占用内存超过系统/容器最大限制，被操作系统强制杀死
+
+Python 出现 OOM 几乎只有两类原因：
+
+1. **内存泄漏**：内存缓慢上涨，日积月累打满上限
+2. **瞬时内存峰值**：一次性加载超大文件、超大列表、批量数据无分片处理
+
+#### （4）内存排查三大核心工具
+
+#### 1）tracemalloc（Python 内置）
+
+```python
+import tracemalloc
+
+# 开启内存追踪
+tracemalloc.start()
+
+# 模拟业务代码
+data = [i for i in range(100000)]
+
+# 获取内存占用
+snapshot = tracemalloc.take_snapshot()
+top_stats = snapshot.statistics('lineno')
+
+for stat in top_stats[:5]:
+    print(stat)
+```
+
+作用：精准定位**哪一行代码内存占用最高**，快速锁定泄漏位置
+
+##### 2）objgraph
+
+```cmd
+pip install objgraph
+```
+
+```python
+import objgraph
+
+# 查看数量最多的前10种对象
+print(objgraph.show_most_common_types(limit=10))
+
+# 查看某个对象的引用链（找到是谁持有它）
+# objgraph.show_backrefs(obj)
+```
+
+持续上涨 = 百分百泄漏
+
+##### 3）memory_profiler
+
+```cmd
+pip install memory-profiler
+```
+
+#### （5）标准内存泄漏排查流程
+
+1. **观察现象**：内存是瞬时冲高，还是缓慢持续上涨
+2. **工具定位**：用 tracemalloc 定位代码行，用 objgraph 定位泄漏对象
+3. **查找引用来源**：找到是谁长期持有本该销毁的对象
+4. **针对性优化**：清理容器、断开引用、手动 del、重启策略
+
+#### （6）内存泄漏通用解决方案
+
+- 及时断开无用引用
+
+  短生命周期对象坚决不存入全局容器，临时变量使用完毕主动 `del` 释放引用
+
+- 容器限量、定时清理
+
+  全局缓存、日志队列、任务队列，设置最大长度、定时清空、LRU 淘汰策略
+
+- 避免循环引用
+
+  业务代码尽量不要手写 `__del__` 方法，规避 GC 回收失效陷阱
+
+- 长任务分片处理
+
+  读取大文件、大批量数据，禁止一次性加载，使用迭代器、分片读取，规避瞬时 OOM
 
 
 
@@ -4836,10 +5045,10 @@ free_list 有容量上限，满了之后再销毁对象就直接释放
 
 [[1] 哔哩哔哩 | 大熊课堂 | Python 中的 with语句](https://www.bilibili.com/video/BV1UK4y137nj?vd_source=4a65573450fad180901198fa5cc2d849)
 
-[[2] 哔哩哔哩 | 千锋python | 高阶函数、回调函数、闭包函数](https://www.bilibili.com/video/BV1se411K79Q?p=3&vd_source=4a65573450fad180901198fa5cc2d849)
+[[2] 哔哩哔哩 | 千锋 python | 高阶函数、回调函数、闭包函数](https://www.bilibili.com/video/BV1se411K79Q?p=3&vd_source=4a65573450fad180901198fa5cc2d849)
 
-[[3] 哔哩哔哩 | 蚂蚁学Python | 并发编程](https://www.bilibili.com/video/BV1bK411A7tV?vd_source=4a65573450fad180901198fa5cc2d849)
+[[3] 哔哩哔哩 | 蚂蚁学 Python | 并发编程](https://www.bilibili.com/video/BV1bK411A7tV?vd_source=4a65573450fad180901198fa5cc2d849)
 
 [[4] 哔哩哔哩 | 码农高天 | asyncio](https://www.bilibili.com/video/BV1oa411b7c9?vd_source=4a65573450fad180901198fa5cc2d849)
 
-[[5] 哔哩哔哩 | AI编程布道者-金角大王 | 内存管理&垃圾回收原理](https://www.bilibili.com/video/BV1F54114761?vd_source=4a65573450fad180901198fa5cc2d849)
+[[5] 哔哩哔哩 | AI编程布道者-金角大王 | 内存管理 & 垃圾回收原理](https://www.bilibili.com/video/BV1F54114761?vd_source=4a65573450fad180901198fa5cc2d849)
