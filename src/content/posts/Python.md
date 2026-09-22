@@ -2870,13 +2870,684 @@ def decorator(func):
 
 
 
-## 九、Python 并发编程
+## 九、错误与异常
+
+Python 有两种错误很容易辨认：语法错误和异常。本文会讲解异常相关知识点
+
+Python assert（断言）用于判断一个表达式，在表达式条件为 false 的时候触发异常
+
+![23](/images/Python/23.png)
+
+### 1、异常
+
+即便 Python 程序的语法是正确的，在运行它的时候，也有可能发生错误。运行期检测到的错误被称为异常
+
+大多数的异常都不会被程序处理，都以错误信息的形式展现在这里:
+
+```python
+>>> 10 * (1/0)             # 0 不能作为除数，触发异常
+Traceback (most recent call last):
+  File "<stdin>", line 1, in ?
+ZeroDivisionError: division by zero
+
+>>> 4 + spam*3             # spam 未定义，触发异常
+Traceback (most recent call last):
+  File "<stdin>", line 1, in ?
+NameError: name 'spam' is not defined
+
+>>> '2' + 2                # int 不能与 str 相加，触发异常
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+TypeError: can only concatenate str (not "int") to str
+```
+
+异常以不同的类型出现，这些类型都作为信息的一部分打印出来：例子中的类型有 ZeroDivisionError，NameError 和 TypeError
+
+错误信息的前面部分显示了异常发生的上下文，并以调用栈的形式显示具体信息
+
+### 2、异常处理
+
+#### （1）**try/except** 语句
+
+![24](/images/Python/24.png)
+
+```python
+while True:
+    try:
+        x = int(input("请输入一个数字: "))
+        break
+    except ValueError:
+        print("您输入的不是数字，请再次尝试输入！")
+```
+
+try 语句按照如下方式工作；
+
+- 首先，执行 try 子句（在关键字 try 和关键字 except 之间的语句）
+- 如果没有异常发生，忽略 except 子句，try 子句执行后结束
+- 如果在执行 try 子句的过程中发生了异常，那么 try 子句余下的部分将被忽略。如果异常的类型和 except 之后的名称相符，那么对应的 except 子句将被执行
+- 如果一个异常没有与任何的 except 匹配，那么这个异常将会传递给上层的 try 中
+
+一个 try 语句可能包含多个except子句，分别来处理不同的特定的异常。最多只有一个分支会被执行。
+
+处理程序将只针对对应的 try 子句中的异常进行处理，而不是其他的 try 的处理程序中的异常。
+
+一个except子句可以同时处理多个异常，这些异常将被放在一个括号里成为一个元组，例如:
+
+```python
+except (RuntimeError, TypeError, NameError):
+    pass
+```
+
+最后一个 except 子句可以忽略异常的名称，它将被当作通配符使用。**你可以使用这种方法打印一个错误信息，然后再次把异常抛出**：
+
+```python
+import sys
+
+try:
+    f = open('myfile.txt')
+    s = f.readline()
+    i = int(s.strip())
+except OSError as err:
+    print("OS error: {0}".format(err))
+except ValueError:
+    print("Could not convert data to an integer.")
+except:     # 忽略异常的名称
+    print("Unexpected error:", sys.exc_info()[0])
+    raise
+```
+
+#### （2）try/except...else
+
+![25](/images/Python/25.png)
+
+#### （3）try-finally 语句
+
+![26](/images/Python/26.png)
+
+### 3、抛出异常
+
+Python 使用 raise 语句抛出一个指定的异常
+
+```python
+raise [Exception [, args [, traceback]]]
+```
+
+```
+x = 10
+if x > 5:
+    raise Exception('x 不能大于 5。x 的值为: {}'.format(x))
+```
+
+raise 唯一的一个参数指定了要被抛出的异常。它必须是一个异常的实例或者是异常的类（也就是 Exception 的子类）
+
+如果你只想知道这是否抛出了一个异常，并不想去处理它，那么一个简单的 raise 语句就可以再次把它抛出
+
+```python
+try:
+    raise NameError('HiThere')   # 模拟一个异常
+except NameError:
+    print('An exception flew by!')
+    raise
+```
+
+### 4、用户自定义异常
+
+你可以通过创建一个新的异常类来拥有自己的异常。异常类继承自 Exception 类，可以直接继承，或者间接继承，例如：
+
+```python
+class MyError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+try:
+    raise MyError(2 * 2)
+except MyError as e:
+    print('My exception occurred, value:', e.value)
+
+raise MyError('oops!')
+```
+
+在这个例子中，类 Exception 默认的 __init__() 被覆盖
+
+当创建一个模块有可能抛出多种不同的异常时，一种通常的做法是为这个包建立一个基础异常类，然后基于这个基础类为不同的错误情况创建不同的子类：
+
+```python
+class Error(Exception):
+    """Base class for exceptions in this module."""
+    pass
+
+class InputError(Error):
+    """Exception raised for errors in the input.
+
+    Attributes:
+        expression -- input expression in which the error occurred
+        message -- explanation of the error
+    """
+
+    def __init__(self, expression, message):
+        self.expression = expression
+        self.message = message
+
+class TransitionError(Error):
+    """Raised when an operation attempts a state transition that's not
+    allowed.
+
+    Attributes:
+        previous -- state at beginning of transition
+        next -- attempted new state
+        message -- explanation of why the specific transition is not allowed
+    """
+
+    def __init__(self, previous, next, message):
+        self.previous = previous
+        self.next = next
+        self.message = message
+```
+
+大多数的异常的名字都以"Error"结尾，就跟标准的异常命名一样
+
+### 5、定义清理行为
+
+try 语句还有另外一个可选的子句，它定义了无论在任何情况下都会执行的清理行为。 例如：
+
+```python
+try:
+    raise KeyboardInterrupt
+finally:
+    print('Goodbye, world!')
+"""
+Goodbye, world!
+Traceback (most recent call last):
+  File "...\test.py", line 2, in <module>
+    raise KeyboardInterrupt
+KeyboardInterrupt
+"""
+```
+
+如果一个异常在 try 子句里（或者在 except 和 else 子句里）被抛出，而又没有任何的 except 把它截住，那么这个异常会在 finally 子句执行后被抛出，以下是一个更复杂的例子：
+
+```python
+def divide(x, y):
+    try:
+        result = x / y
+    except ZeroDivisionError:
+        print("division by zero!")
+    else:
+        print("result is", result)
+    finally:
+        print("executing finally clause")
+
+divide(2, 1)
+"""
+result is 2.0
+executing finally clause
+"""
+divide(2, 0)
+"""
+division by zero!
+executing finally clause
+"""
+divide("2", "1")
+"""
+executing finally clause
+TypeError: unsupported operand type(s) for /: 'str' and 'str'
+"""
+```
+
+### 5、预定义的清理行为
+
+一些对象定义了标准的清理行为，无论系统是否成功的使用了它，一旦不需要它了，那么这个标准的清理行为就会执行
+
+下面这个例子展示了尝试打开一个文件，然后把内容打印到屏幕上：
+
+```python
+for line in open("myfile.txt"):
+    print(line, end="")
+```
+
+以上这段代码的问题是，当执行完毕后，文件会保持打开状态，并没有被关闭
+
+关键词 with 语句就可以保证诸如文件之类的对象在使用完之后一定会正确的执行他的清理方法：
+
+```python
+with open("myfile.txt") as f:
+    for line in f:
+        print(line, end="")
+```
+
+以上这段代码执行完毕后，就算在处理过程中出问题了，文件 f 总是会关闭
+
+
+
+
+
+---
+
+
+
+
+
+## 十、面向对象编程
+
+Python 从设计之初就已经是一门面向对象的语言，正因为如此，在Python中创建一个类和对象是很容易的
+
+### 1、面向对象技术简介
+
+- 类(Class)：用来描述具有相同的属性和方法的对象的集合。它定义了该集合中每个对象所共有的属性和方法。对象是类的实例
+- 方法：类中定义的函数
+- 类变量：类变量在整个实例化的对象中是公用的。类变量定义在类中且在函数体之外。类变量通常不作为实例变量使用
+- 数据成员：类变量或者实例变量用于处理类及其实例对象的相关的数据
+- 方法重写：如果从父类继承的方法不能满足子类的需求，可以对其进行改写，这个过程叫方法的覆盖（override），也称为方法的重写
+- 局部变量：定义在方法中的变量，只作用于当前实例的类
+- 实例变量：在类的声明中，属性是用变量来表示的，这种变量就称为实例变量，实例变量就是一个用 self 修饰的变量
+- 继承：即一个派生类（derived class）继承基类（base class）的字段和方法。继承也允许把一个派生类的对象作为一个基类对象对待
+- 实例化：创建一个类的实例，类的具体对象
+- 对象：通过类定义的数据结构实例。对象包括两个数据成员（类变量和实例变量）和方法
+
+和其它编程语言相比，Python 在尽可能不增加新的语法和语义的情况下加入了类机制
+
+### 2、类定义
+
+```python
+class ClassName:
+    ......
+```
+
+类实例化后，可以使用其属性，实际上，创建一个类之后，可以通过类名访问其属性
+
+### 3、类对象
+
+类对象支持两种操作：属性引用和实例化
+
+属性引用使用和 Python 中所有的属性引用一样的标准语法：**obj.name**
+
+类对象创建后，类命名空间中所有的命名都是有效属性名
+
+##### 1）__ init __
+
+类有一个名为 __init__() 的特殊方法（**构造方法**），该方法在类实例化时会自动调用
+
+```python
+def __init__(self):
+    self.data = []
+```
+
+##### 2）self 
+
+代表类的实例，而非类
+
+类的方法与普通的函数只有一个特别的区别——它们必须有一个额外的**第一个参数名称**，按照惯例它的名称是 self
+
+```python
+class Test:
+    def prt(self):
+        print(self)
+        print(self.__class__)
+ 
+t = Test()
+t.prt()
+```
+
+```
+<__main__.Test instance at 0x100771878>
+__main__.Test
+```
+
+在上面的例子中，self 是一个指向类实例的引用，它在 **__init__** 构造函数中用于初始化实例的属性，也在 **display_value** 方法中用于访问实例的属性。通过使用 self，你可以在类的方法中访问和操作实例的属性，从而实现类的行为
+
+### 4、类的方法
+
+```python
+# 类定义
+class people:
+    
+    # 定义基本属性
+    name = ''
+    age = 0
+    # 定义私有属性,私有属性在类外部无法直接进行访问
+    __weight = 0
+    
+    # 定义构造方法
+    def __init__(self,n,a,w):
+        self.name = n
+        self.age = a
+        self.__weight = w
+        
+    def speak(self):
+        print("%s 说: 我 %d 岁。" %(self.name,self.age))
+```
+
+### 5、继承
+
+子类（派生类 DerivedClassName）会继承父类（基类 BaseClassName）的属性和方法
+
+BaseClassName（实例中的基类名）必须与派生类定义在一个作用域内。除了类，还可以用表达式，基类定义在另一个模块中时这一点非常有用：
+
+```python
+class DerivedClassName(modname.BaseClassName):
+    ......
+```
+
+实例：
+
+```python
+class people:
+    
+    name = ''
+    age = 0
+    __weight = 0
+
+    def __init__(self,n,a,w):
+        self.name = n
+        self.age = a
+        self.__weight = w
+        
+    def speak(self):
+        print("%s 说: 我 %d 岁。" %(self.name,self.age))
+ 
+# 单继承示例
+class student(people):
+    grade = ''
+    def __init__(self,n,a,w,g):
+        # 调用父类的构函
+        people.__init__(self,n,a,w)
+        self.grade = g
+    # 覆写父类的方法
+    def speak(self):
+        print("%s 说: 我 %d 岁了，我在读 %d 年级"%(self.name,self.age,self.grade))
+```
+
+### 6、多继承
+
+```python
+# 多继承
+class sample(speaker,student):
+    a =''
+    def __init__(self,n,a,w,g,t):
+        student.__init__(self,n,a,w,g)
+        speaker.__init__(self,n,t)
+```
+
+### 7、方法重写
+
+如果你的父类方法的功能不能满足你的需求，你可以在子类重写你父类的方法，实例如下：
+
+```python
+class Parent:       
+   def myMethod(self):
+      print ('调用父类方法')
+ 
+class Child(Parent): 
+   def myMethod(self):
+      print ('调用子类方法')
+ 
+c = Child()          
+c.myMethod()                # 子类调用重写方法
+super(Child,c).myMethod()   # 用子类对象调用父类已被覆盖的方法
+```
+
+### 8、类属性与方法
+
+#### （1）类的私有属性
+
+**__private_attrs**：两个下划线开头，声明该属性为私有，不能在类的外部被使用或直接访问
+
+在类内部的方法中使用时： **self.__private_attrs**
+
+#### （2）类的方法
+
+在类的内部，使用 def 关键字来定义一个方法，与一般函数定义不同，类方法必须包含参数 **self**，且为第一个参数，**self** 代表的是类的实例
+
+**self** 的名字并不是规定死的，也可以使用 **this**，但是最好还是按照约定使用 **self**
+
+#### （3）类的私有方法
+
+**__private_method**：两个下划线开头，声明该方法为私有方法，只能在类的内部调用 ，不能在类的外部调用
+
+在类内部的使用：**self.__private_methods**
+
+#### （4）运算符重载
+
+Python 同样支持运算符重载，我们可以对类的专有方法进行重载，实例如下：
+
+```python
+class Vector:
+   def __init__(self, a, b):
+      self.a = a
+      self.b = b
+ 
+   def __str__(self):
+      return 'Vector (%d, %d)' % (self.a, self.b)
+   
+   def __add__(self,other):
+      return Vector(self.a + other.a, self.b + other.b)
+ 
+v1 = Vector(2,10)
+v2 = Vector(5,-2)
+print (v1 + v2)
+```
+
+
+
+
+
+---
+
+
+
+
+
+## 十一、类型注解
+
+### 1、简介
+
+**类型注解（Type Hints）** 是一种为代码添加"说明标签"的技术，明确地指出变量、函数参数和返回值应该是什么数据类型
+
+简单来说，类型注解就是在代码中注明数据类型的语法，它的核心目的是：
+
+- **提高代码可读性**：让他人（以及未来的你）一眼就能看懂代码的意图
+- **便于静态检查**：在运行代码前，通过工具发现潜在的类型错误
+- **增强IDE支持**：让代码编辑器提供更准确的自动补全和提示
+
+一个简单的例子：
+
+```python
+# 没有类型注解
+def greet(name):
+    return f"Hello, {name}"
+
+# 有类型注解
+def greet(name: str) -> str:
+    return f"Hello, {name}"
+```
+
+第二段代码明确指出了 `name` 应该是字符串类型（`str`），函数会返回一个字符串（`-> str`）
+
+### 2、为什么需要类型注解？
+
+Python 以其**动态类型**特性而闻名——你不需要提前声明变量的类型，解释器会在运行时自动推断。这虽然灵活，但也带来了问题：
+
+1. **代码难以理解**：看到一个函数时，不清楚应该传入什么类型的数据
+2. **隐藏的bug**：可能不小心传入了错误类型，直到运行时才报错
+3. **开发效率低**：IDE无法提供准确的代码提示和补全
+
+类型注解通过提供可选的类型信息来解决这些问题，让你的代码更加**健壮**和**可维护**
+
+### 3、基础语法详解
+
+#### （1）变量注解
+
+从 Python 3.6 开始，你可以直接为变量添加类型注解：
+
+```python
+name: str = "Alice"      
+age: int = 30           
+is_student: bool = False  
+scores: list = [95, 88, 91]
+```
+
+**说明：**`name: str` 读作"变量 name 的类型是 str"
+
+#### （2）函数注解
+
+```python
+def greet(first_name: str, last_name: str) -> str:
+    full_name = first_name + " " + last_name
+    return "Hello, " + full_name
+```
+
+#### （3）参数默认值
+
+你可以同时使用类型注解和默认值：
+
+```python
+def say_hello(name: str, times: int = 1) -> str:
+    return " ".join([f"Hello, {name}!"] * times)
+```
+
+### 4、复杂类型注解
+
+基本的 str, int, list 很好用，但如果我们想表达"一个由整数组成的列表"该怎么办？
+
+这时就需要 Python 的 typing 模块提供更强大的工具
+
+#### （1）列表、字典等容器类型
+
+```python
+from typing import List, Dict, Tuple, Set
+
+# List[int] 表示这是一个只包含整数的列表
+numbers: List[int] = [1, 2, 3, 4, 5]
+
+# Dict[str, int] 表示这是一个键为字符串、值为整数的字典
+student_scores: Dict[str, int] = {"Alice": 95, "Bob": 88}
+
+# Tuple[int, str, bool] 表示这是一个包含整数、字符串、布尔值的元组
+person_info: Tuple[int, str, bool] = (25, "Alice", True)
+
+# Set[str] 表示这是一个只包含字符串的集合
+unique_names: Set[str] = {"Alice", "Bob", "Charlie"}
+```
+
+#### （2）可选类型（Optional）
+
+当值可能是某种类型或者是 `None` 时使用：
+
+```python
+from typing import Optional
+
+def find_student(name: str) -> Optional[str]:
+    """根据名字查找学生，可能找到也可能返回None"""
+    students = {"Alice": "A001", "Bob": "B002"}
+    return students.get(name)  # 可能返回字符串或None
+
+# 等价于 Union[str, None]
+```
+
+#### （3）联合类型（Union）
+
+当值可能是多种类型之一时使用：
+
+```python
+from typing import Union
+
+def process_input(data: Union[str, int, List[int]]) -> None:
+    """处理可能是字符串、整数或整数列表的输入"""
+    if isinstance(data, str):
+        print(f"字符串: {data}")
+    elif isinstance(data, int):
+        print(f"整数: {data}")
+    elif isinstance(data, list):
+        print(f"列表: {data}")
+
+process_input("hello")    # 输出：字符串: hello
+process_input(42)         # 输出：整数: 42  
+process_input([1, 2, 3])  # 输出：列表: [1, 2, 3]
+```
+
+### 5、类型检查
+
+#### （1）使用 Mypy 进行静态类型检查
+
+Mypy 是最流行的 Python 类型检查器。首先安装它：
+
+```python
+pip install mypy
+```
+
+假设我们有一个有潜在类型问题的文件 `example.py`，运行 mypy 检查：
+
+```cmd
+mypy example.py
+```
+
+#### （2）在 IDE 中实时检查
+
+现代 IDE（如 VS Code、PyCharm）都内置了类型检查支持：
+
+- **错误高亮**：类型不匹配的代码会被标记出来
+- **智能提示**：输入代码时会显示参数和返回值的类型信息
+- **自动补全**：基于类型信息提供更准确的代码补全建议
+
+### 6、最佳实践指南
+
+1. 保持一致性
+  在项目中保持统一的注解风格，团队协商决定注解的详细程度
+
+2. 避免过度注解
+
+3. 处理第三方库
+
+   对于没有类型注解的第三方库，可以：
+
+   - 查看是否有对应的类型存根文件（通常叫 `types-packageName`）
+   - 使用 `Any` 类型暂时绕过检查
+   - 或者为常用函数添加自己的类型注解
+
+### 7、常见问题解答
+
+#### （1）类型注解会影响性能吗？
+
+不会
+
+类型注解在运行时会被忽略，只用于静态分析和开发工具
+
+#### （2）必须使用类型注解吗？
+
+不强制
+
+Python 仍然是动态类型语言，类型注解是可选的。但强烈推荐使用，特别是大型项目
+
+#### （3）如果注解错了会怎么样？
+
+类型检查器会报错，但程序仍然可以运行。注解只是"提示"而不是"强制"
+
+
+
+
+
+---
+
+
+
+
+
+## 十二、Python 并发编程
 
 ### 1、前言
 
 #### （1）为什么要引入并发编程？
 
+在编写普通 Python 顺序执行（串行）程序的时候，代码按照从上到下的顺序一行一行执行，上一段逻辑没有执行完毕，后面的代码就会处于等待状态
 
+很多场景下程序会遇到**等待阻塞**：比如网络请求等待远程接口返回数据、读写磁盘文件、数据库查询、接口调用、等待用户输入等。这类任务 CPU 本身几乎没有运算压力，大部分时间都在原地等待 IO 完成
+
+并发编程就是为了解决这类痛点，它允许程序**在等待某个任务阻塞的时候，转而去执行其他任务**，不用卡死在原地等待
+
+并发不等于同一时刻多核同时计算（那是并行），对于 IO 密集型任务，并发通过合理调度任务，把 CPU 空闲时间利用起来，大幅提升整体吞吐量
 
 #### （2）有哪些程序提速的方法？
 
@@ -3630,41 +4301,13 @@ cur http://127.0.0.1:5000/is_prime/10,20,30,40
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## 十、CPython 解释器
+## 十三、CPython 解释器
 
 ### 1、
 
