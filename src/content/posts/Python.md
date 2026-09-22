@@ -2,7 +2,7 @@
 title: Python3 高级教程
 date: 2026-09-20
 tags: [Python]
-description: 讲解 Python 基础（语法、装饰器、高阶函数、回调、闭包），Python 并发（多线程/多进程、线程池、进程池、asyncio 协程、GIL锁），CPython 解释器（内存模型、垃圾回收、GIL、内存泄漏/OOM 排查）
+description: 讲解 Python 基础（语法、高阶函数、回调、闭包、面向对象），Python 并发（多线程/多进程、线程池、进程池、GIL锁、asyncio 协程），CPython 解释器（内存模型、垃圾回收、GIL、内存泄漏/OOM 排查）
 ---
 
 Python 是一个高层次的结合了解释性、编译性、互动性和面向对象的脚本语言。本文从最基础的 Python 语法写起，逐步讲解 Python 高级内容，带你彻底掌握 Python 。
@@ -1841,7 +1841,7 @@ while True:
         sys.exit()
 ```
 
-#### （2）
+#### （2）创建一个迭代器
 
 把一个类作为一个迭代器使用需要在类中实现两个方法 __iter__() 与 __next__() 
 
@@ -3495,7 +3495,7 @@ mypy example.py
 ### 6、最佳实践指南
 
 1. 保持一致性
-  在项目中保持统一的注解风格，团队协商决定注解的详细程度
+    在项目中保持统一的注解风格，团队协商决定注解的详细程度
 
 2. 避免过度注解
 
@@ -4297,6 +4297,204 @@ cur http://127.0.0.1:5000/is_prime/10,20,30,40
 # {"10": false, "20": false, "30": false, "40": false}
 ```
 
+### 11、asyncio 协程
+
+#### （1）简介
+
+asyncio 本质上是单进程单线程的程序，并不能提升运算速度，比较适合处理需要等待的任务，最典型的就是网络通讯
+
+asyncio 运算核心是 event loop，event loop 就像一个大脑，面对很多可以执行的任务，决定执行哪个任务
+
+在 asyncio 里，同时执行的任务只能有一个，不存在系统级的上下文切换，需要每一个任务主动告诉 event loop：任务结束 —> 开始别的任务，所以不存在竞争冒险的问题
+
+coroutine,task
+
+#### （2）coroutine
+
+- coroutine function：所有以 async def 开头的函数都是 coroutine function
+- coroutine object：所有的 coroutine function 返回的都是 coroutine object
+
+如下的代码：
+
+```python
+import asyncio
+
+async def main():
+    print('hello')
+    await asyncio.sleep(1)
+    print('world')
+    
+coro = main()
+```
+
+函数 `main` 就是一个 `coroutine function` ，`coro = main()` 返回的是一个 `coroutine object`，所以当我们运行该 python 代码时会提示：
+
+```
+<sys>:0: RuntimeWarning: coroutine 'main' was never awaited
+```
+
+我们需要按照如下步骤运行 coroutine 代码：
+
+1. 进入 async 模式（进入 event loop）
+2. 将 coroutine 变成 task
+
+正常的 python 代码运行的时候是 synchronize 模式，用入口函数 `asyncio.run()` 即可，其中参数是一个 `coroutine`，其会做两件事：
+
+1. 建立起 event loop
+2. 将这个 coroutine 变成  event loop 中的第一个 task
+
+```python
+asyncio.run(main())
+# hello
+# world
+```
+
+#### （3）增加 task 的方法
+
+将 coroutine 变成 task，让他可以排队执行
+
+##### 1）await
+
+```python
+import asyncio
+import time
+
+async def say_after(delay, what):
+    await asyncio.sleep(delay)
+    print(what)
+
+async def main():
+    print(f"started at {time.strftime('%X')}")
+
+    await say_after(1, 'hello')
+    await say_after(2, 'world')
+
+    print(f"finished at {time.strftime('%X')}")
+
+asyncio.run(main())
+```
+
+这段代码中，`asyncio.sleep(delay)` 返回的也是一个 `coroutine` ，其前面加上 `await` 时，发生如下几事件：
+
+1. coroutine 被包装成一个 task，并且被告诉了 event loop 有一个新的 task
+2. 告诉 event loop，现在这个 task 需要等到 say_after task 完成之后才能继续
+3. yield 出去
+4. 当 event loop 再次安排它运行的时候，它会将 say_after 这个 coroutine 里真实的返回值拿出来保存
+
+让我们拆解这段代码：
+
+1. asyncio.run(main())：将 main 作为一个 task 放到 vent loop 中，开始运行
+2. 在 main 中，首先执行了 print 函数，执行到第一个 await 时，将 say_after 这个 coroutine object 变成一个 task，放回 event loop 里，将控制权交给 event loop，现在 event loop 里有两个 task（一个时 main，一个是 say_after ，main 需要等待 say_after 运行）
+3. 同理，依次执行
+4. 当第二个 say_after 执行完后， event loop 中只有一个 task，控制权重新交给 main
+
+其中所有控制权的返回都是显示的，即 event loop 没办法强行从一个 task 里拿回控制权，必须 task 主动交回控制权
+
+##### 2）create_task 函数
+
+```python
+import asyncio
+import time
+
+async def say_after(delay, what):
+    await asyncio.sleep(delay)
+    print(what)
+
+async def main():
+    task1 = asyncio.create_task(
+        say_after(1, 'hello'))
+
+    task2 = asyncio.create_task(
+        say_after(2, 'world'))
+
+    print(f"started at {time.strftime('%X')}")
+
+    await task1
+    await task2
+
+    print(f"finished at {time.strftime('%X')}")
+
+asyncio.run(main())
+```
+
+`create_task` 函数的参数依旧是一个 `coroutine`，会将这个 `coroutine ` 包装成一个 task
+
+当第一个 say_after 被包装成 task 时，此时控制权依旧在 main 手里，main 将第二个 say_after 包装成 task
+
+我们前面介绍：当 await 后面是一个 coroutine 时，会进行一系列事件，但是如果后面是一个 task 时，只是告诉 event loop 需要完成的任务，并且交还控制权， 在控制权交还回来的时候，从 task 里面提取所需要的返回值，event loop 中的任务会同时进行
+
+由此可见 async 很适合解决一些网络通讯的问题，也就是所谓的 IO bound task
+
+3）gather 函数
+
+gather 的参数是若干个 coroutine 或者 task，甚至可以是 gather 
+
+- 如果参数是 **coroutine**：将其包装成 task，注册到 event loop 里，返回 futhre 值，当 await 这个 futhre 时，会告诉  event loop 需要等待里面每一个 task 都完成才继续，并且将这些 task 的 return 值放到一个 list 里，然后返回回来
+- 如果参数是 **task**：不会重复创建新 task，直接复用已经在事件循环中调度运行的 task，同样等待全部传入 task 执行完毕，收集所有 task 的返回值，按传入 task 的顺序组装成列表返回。即使某个 task 执行抛出异常，gather 默认也会等待全部任务结束后再抛出异常
+
+gather 不是一个 coroutine，但是会返回一个叫做 futhre 的东西，futhre 也可以用 await
+
+```python
+# 参数是 coroutine
+import asyncio
+import time
+
+async def say_after(delay, what):
+    await asyncio.sleep(delay)
+    return f"{what} - {delay}"
+
+async def main():
+    print(f"started at {time.strftime('%X')}")
+
+    ret = await asyncio.gather(
+        say_after(1, 'hello'),
+        say_after(2, 'world')
+    )
+
+    print(ret)
+
+    print(f"finished at {time.strftime('%X')}")
+
+asyncio.run(main())
+```
+
+```python
+# 参数是 task
+
+import asyncio
+import time
+
+async def say_after(delay, what):
+    await asyncio.sleep(delay)
+    return f"{what} - {delay}"
+
+async def main():
+    task1 = asyncio.create_task(
+        say_after(1, 'hello'))
+
+    task2 = asyncio.create_task(
+        say_after(2, 'world'))
+
+    print(f"started at {time.strftime('%X')}")
+
+    ret = await asyncio.gather(task1, task2)
+    print(ret)
+
+    print(f"finished at {time.strftime('%X')}")
+
+asyncio.run(main())
+```
+
+```
+started at 16:36:55
+['hello - 1', 'world - 2']
+finished at 16:36:57
+```
+
+#### （4）总结
+
+尽管我们说协程的方式是并发的，但是同时刻实际上只有一段代码在跑，协程只是想办法利用代码中间等待的时间，所以如果代码中没有“等待”这件事的话，协程是没有帮助的
+
 
 
 
@@ -4309,7 +4507,296 @@ cur http://127.0.0.1:5000/is_prime/10,20,30,40
 
 ## 十三、CPython 解释器
 
-### 1、
+想要真正吃透 Python、看懂底层逻辑、解决线上性能问题、排查内存泄漏、OOM 异常、理解 GIL 锁的本质，就必须深入 Python 的核心运行载体——**CPython 解释器**
+
+### 1、CPython 介绍
+
+#### （1）什么是 CPython
+
+简单来说：**CPython 是使用 C 语言编写的 Python 解释器，是 Python 语言的官方标准实现**
+
+Python 是一门解释型高级语言，本身只定义了语法规范、运行规则和语义标准，没有固定的运行程序。而 CPython 就是这套规则的具体落地实现，也是我们从官网下载、日常安装使用的标准版 Python
+
+市面上除了 CPython，还有其他 Python 解释器实现，例如：
+
+- **PyPy**：JIT 即时编译解释器，运行速度远快于 CPython，适合纯计算场景
+- **Jython**：基于 Java 实现，可无缝对接 Java 生态
+- **IronPython**：基于 .NET 实现，适配 Windows 平台生态
+
+#### （2） CPython 的核心运行机制
+
+CPython 并非逐行简单直译执行代码，其整体执行流程分为两步：
+
+**第一步：预编译（字节码编译）**
+
+CPython 会先将我们编写的 `.py` 源码，编译为平台无关的 **Python 字节码（Bytecode）**，生成对应的 `.pyc` 缓存文件，用于加速二次运行。这一步不属于机器码编译，只是源码的轻量化转换
+
+**第二步：解释执行**
+
+CPython 虚拟机（PVM）逐行解析、执行字节码，最终调用底层 C 代码完成逻辑运算、内存操作、IO 交互，实现程序运行
+
+这也是 Python 跨平台的核心原因：只要对应平台装有 CPython 解释器，同一套字节码就可以正常运行，无需修改代码
+
+#### （3）为什么要学 CPython 底层
+
+如果我们只会调用 Python 语法和库函数，遇到实际问题可能无从下手，核心原因就是不懂 CPython 底层机制，学 CPython 底层可以让我们：
+
+- **搞懂并发瓶颈**：理解 GIL 锁为什么存在、为什么多线程无法利用多核、协程为何能实现高并发
+- **解决内存问题**：掌握对象内存模型、引用计数、垃圾回收机制，精准排查内存泄漏、程序卡顿、OOM 崩溃问题
+- **读懂代码本质**：明白变量、对象、深浅拷贝、作用域的底层存储逻辑，规避隐形 Bug
+- **性能调优**：根据底层机制合理选择多线程/多进程/协程，写出贴合 CPython 特性的高性能代码
+
+### 2、内存模型
+
+#### （1）环状双向链表 refchain
+
+![27](/images/Python/27.png)
+
+在 python 程序中创建的任何对象都会放在 refchain 链表中
+
+```python
+name = "武沛齐"
+age = 18
+hobby = ["篮球",'美女']
+```
+
+不同对象放进 refchain 时，内部会创建一些数据，可以理解为：
+
+```python
+name = "武沛齐"  # 内部会创建非语言结构体 【上一个对象、下一个对象、类型、引用个数】
+new = name      # 不会创建两个“武沛齐”，而是让 new 也指向 “武沛齐”，结构体中“引用个数” + 1
+```
+
+```python
+age = 18        # 内部会创建一些数据【上一个对象、下一个对象、类型、引用个数、val=18】
+```
+
+```python
+hobby = ["篮球",'美女'] # 内部会创建一些数据【上一个对象、下一个对象、类型、引用个数、items = 元素、元素个数】
+```
+
+**C 语言源码**：
+
+```c
+#define PyObject_HEAD        PyObject ob_base;
+#define PyObject_VAR_HEAD    PyVarObject ob_base;
+
+// 宏定义，包含 上一个、下一个，用于构造双向链表用 (放到refchain链表中时，要用到)
+#define _PyObject_HEAD_EXTRA    \
+    struct _object *_ob_next;   \
+    struct _object *_ob_prev;
+
+// PyObject 结构体
+typedef struct _object {
+    _PyObject_HEAD_EXTRA           // 用于构造双向链表
+    Py_ssize_t ob_refcnt;          // 引用计数器
+    struct _typeobject *ob_type;   // 数据类型
+} PyObject;
+
+// 变长对象（list/tuple）额外增加 ob_size 字段保存元素数量
+typedef struct {
+    PyObject ob_base; // PyObject对象
+    Py_ssize_t ob_size; /* Number of items in variable part, 即: 元素个数 */
+} PyVarObject;
+```
+
+在 C 源码中如何体现每个对象中都有的相同的值：PyObject 结构体（4 个值）
+
+四个值分别：
+
+- `_ob_next`：双向链表下一个对象指针
+- `_ob_prev`：双向链表上一个对象指针
+- `ob_refcnt`：引用计数
+- `ob_type`：对象类型指针
+
+变长对象（list/tuple）会在 PyObject 基础上额外增加 `ob_size` 字段保存元素数量
+
+#### （2）类型封装结构体
+
+**C 语言源码**：
+
+```c
+// float类型
+typedef struct {
+    PyObject_HEAD
+    double ob_fval;
+} PyFloatObject;
+
+// int类型
+struct _longobject {
+    PyObject_VAR_HEAD
+    digit ob_digit[1];
+};
+/* Long (arbitrary precision) integer object interface */
+typedef struct _longobject PyLongObject; /* Revealed in lo */
+
+// list类型
+typedef struct {
+    PyObject_VAR_HEAD
+    PyObject **ob_item;
+    Py_ssize_t allocated;
+} PyListObject;
+
+// tuple类型
+typedef struct {
+    PyObject_VAR_HEAD
+    PyObject *ob_item[1];
+} PyTupleObject;
+
+// dict类型
+typedef struct {
+    PyObject_HEAD
+    Py_ssize_t ma_used;
+    PyDictKeysObject *ma_keys;
+    PyObject **ma_values;
+} PyDictObject;
+```
+
+例如当创建 data = 3.14 时，内部会创建：
+
+- _ob_next = refchain 中的上一个对象
+- _ob_prev = refchain 中的下一个对象
+- ob_refcnt = 1
+- ob_type = float
+- ob_fval = 3.14
+
+### 3、垃圾回收机制
+
+提到垃圾回收机制，就会听到一句话：引用计数器为主，标记清除和分代回收为辅（记住这句话，忽悠一票人）
+
+#### （1）引用计数器
+
+```python
+v1 = 3.14
+v2 = 999
+v3 = (1,2,3)
+```
+
+当 python 程序运行时，会根据数据类型的不同找到其对应的结构体，根据结构体中的字段来进行创建相关的数据，然后将对象添加到 refchain 双向链表中
+
+在 C 源码中有两个关键的结构体：PyObject 结构体、PyVarObject 结构体
+
+每个对象中有 `ob_refcnt` 就是引用计数器，值默认为 1，当有其他变量引用对象时，引用计数器就会发生变化
+
+##### 1）引用
+
+```python
+a = 99999
+b = a
+```
+
+##### 2）删除引用
+
+```python
+a = 99999
+b = a
+del b  # b 变量删除；b 对应对象引用计数器 - 1
+del a  # a 变量删除；a 对应对象引用计数器 - 1
+```
+
+当一个对象的引用计数器为 0 时，意味着没有人再使用这个对象了，这个对象就是垃圾，垃圾回收
+
+回收：
+
+1. 对象从refchain链表移除
+2. 将对象销毁
+3. 内存归还
+
+### （2）循环引用 & 交叉感染
+
+```python
+v1 = [11,22,33]   # refchain 中创建一个列表对象，由于 v1=对象，所以列表引对象用计数器为 1
+v2 = [44,55,66]   # refchain 中再创建一个列表对象，因 v2=对象，所以列表对象引用计数器为 1
+v1.append(v2)     # 把 v2 追加到 v1 中，则 v2 对应的 [44,55,66] 对象的引用计数器加 1，最终为 2
+v2.append(v1)     # 把 v1 追加到 v2 中，则 v1 对应的 [11,22,33] 对象的引用计数器加 1，最终为 2
+del v1            # 引用计数器 - 1
+del v2            # 引用计数器 - 1
+```
+
+此时引用计数都不为 0，单纯依靠引用计数无法回收这两块内存，造成内存泄漏，这就是循环引用问题
+
+### （3）标记清除
+
+目的：为了解决引用计数器循环引用的不足
+
+实现：在 python 的底层再维护一个链表，链表中专门放那些可能存在循环引用的对象（list/tuple/dict/set）
+
+![28](/images/Python/28.png)
+
+在 Python 内部某种情况下触发，回去扫描可能存在循环引用的链表中的每个元素，检查是否有循环引用，如果有则让双方的引用计数器 -1；如果是 0 则垃圾回收
+
+问题：
+
+- 什么时候扫描？
+- 扫描代价大，每次扫描全部容器链表，会产生 STW，性能开销大
+
+### （4）分代回收
+
+将可能存在循环引用的对象维护成 3 个链表：
+
+![29](/images/Python/29.png)
+
+每一代都是一个双向链表
+
+- 0 代：新创建容器对象放入 0 代
+- 1 代：每次 0 代扫描，存活下来的对象晋升到 1 代
+- 2 代：每次 1 代扫描，存活的对象晋升到 2 代
+
+什么时候扫描？
+
+- 0 代：0 代中对象个数达到 700 个扫描一次
+- 1 代：0 代扫描 10 次，则 1 代扫描一次
+- 2 代：1 代扫描 10 次，则 2 代扫描一次
+
+分代回收基于**弱分代假说**：大多数对象都是朝生夕灭；存活越久的对象，越不容易是垃圾。
+
+### （5）小结
+
+问：给我聊聊 python 的内存管理 / 垃圾回收机制
+
+在 python 中维护了一个 refchain 的双向环状链表，这个链表中存储程序创建的所有对象，每种类型的对象中都有一个 ob_refcnt 引用计数器的值，引用个数 +1、-1，最后当引用计数器变为 0 时会进行垃圾回收（对象销毁、refchain 中移除）
+
+但是，在 python 中对于那些可以有多个元素组成的对象可能会存在循环引用的问题，为了解决这个问题 python 又引入了标记清除和分代回收，在其内部为了 4 个链表：
+
+- refchain
+- 2 代，10 次
+- 1 代，10 次
+- 0 代，700 个
+
+在源码内部当达到各自的阈值时，就会触发扫描链表进行标记清除的动作（有循环则各自 - 1）
+
+但是，源码内部在上述的流程中提出了优化机制（缓存机制）
+
+### （6）缓存机制
+
+##### 1）池（int）
+
+为了避免重复创建和销毁一些常见对象，维护池
+
+```python
+# 启动解释器时，Python 内部帮我们创建常用的值（-5 到 257）：-5、-4、…… 257 
+v1 = 7  # 内部不会开辟内存，直接去池中获取
+v2 = 9  # 内部不会开辟内存，直接去池中获取
+v3 = 9  # 内部不会开辟内存，直接去池中获取
+print(id(v2), id(v3))
+# 140703430571176 140703430571176
+```
+
+池中的这些数据永远不会被回收
+
+##### 2）free_list（float/list/tuple/dict）
+
+当一个对象的引用计数器为 0 时，按理说应该回收，内部不会直接回收，而是将对象添加到 free_list 链表中当缓存。以后再去创建对象时，不再重新开辟内存，而是直接使用 free_list
+
+```python
+v1 = 3.14   # 开辟内存，内部存储结构体中定义那几个值，并存到 refchain 中
+del v1      # refchain 中移除，将对象添加到 free_list 中，free_list 满了则销毁
+v9 = 999.99 # 不会重新开辟内存，去 free_list 中获取对象，对象内部数据初始化，再放到 refchain 中
+```
+
+free_list 有容量上限，满了之后再销毁对象就直接释放
+
+### 4、GIL 全局解释器锁
 
 
 
@@ -4327,9 +4814,32 @@ cur http://127.0.0.1:5000/is_prime/10,20,30,40
 
 
 
+### 5、内存泄漏与 OOM 排查
 
 
 
 
 
 
+
+
+
+
+
+---
+
+
+
+
+
+## 参考视频
+
+[[1] 哔哩哔哩 | 大熊课堂 | Python 中的 with语句](https://www.bilibili.com/video/BV1UK4y137nj?vd_source=4a65573450fad180901198fa5cc2d849)
+
+[[2] 哔哩哔哩 | 千锋python | 高阶函数、回调函数、闭包函数](https://www.bilibili.com/video/BV1se411K79Q?p=3&vd_source=4a65573450fad180901198fa5cc2d849)
+
+[[3] 哔哩哔哩 | 蚂蚁学Python | 并发编程](https://www.bilibili.com/video/BV1bK411A7tV?vd_source=4a65573450fad180901198fa5cc2d849)
+
+[[4] 哔哩哔哩 | 码农高天 | asyncio](https://www.bilibili.com/video/BV1oa411b7c9?vd_source=4a65573450fad180901198fa5cc2d849)
+
+[[5] 哔哩哔哩 | AI编程布道者-金角大王 | 内存管理&垃圾回收原理](https://www.bilibili.com/video/BV1F54114761?vd_source=4a65573450fad180901198fa5cc2d849)
