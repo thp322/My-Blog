@@ -451,53 +451,531 @@ create table emp(
 
 ### 5、DML
 
+DML 英文全称是 Data Manipulation Language (数据操作语言)，用来对数据库中表的数据记录进行增、删、改操作
 
+- 添加数据（INSERT）
+- 修改数据（UPDATE）
+- 删除数据（DELETE）
 
+#### （1）添加数据
 
+##### 1） 给指定字段添加数据
 
+```sql
+INSERT INTO 表名(字段名1, 字段名2, ...) VALUES(值1, 值2, ...);
+```
 
+插入数据完成之后，查询数据库的数据：
 
+```sql
+select * from 表名;
+```
 
+##### 2）给全部字段添加数据
 
+```sql
+INSERT INTO 表名 VALUES (值1, 值2, ...);
+```
 
+##### 3）批量添加数据
 
+```sql
+INSERT INTO 表名 (字段名1, 字段名2, ...) VALUES (值1, 值2, ...), (值1, 值2, ...), (值1, 值2, ...);
+INSERT INTO 表名 VALUES (值1, 值2, ...), (值1, 值2, ...), (值1, 值2, ...);
+```
 
+注意事项：
 
+- 插入数据时，指定的字段顺序需要与值的顺序是一一对应的
+- 字符串和日期型数据应该包含在引号中
+- 插入的数据大小，应该在字段的规定范围内
 
+#### （2）修改数据
 
+```sql
+UPDATE 表名 SET 字段名1 = 值1 , 字段名2 = 值2 , .... [ WHERE 条件 ] ;
+```
 
+注意事项： 
 
+修改语句的条件可以有，也可以没有，如果没有条件，则会修改整张表的所有数据
 
+#### （3）删除数据
 
+```sql
+DELETE FROM 表名 [ WHERE 条件 ];
+```
 
+注意事项：
 
-
+- DELETE 语句的条件可以有，也可以没有，如果没有条件，则会删除整张表的所有数据
+- DELETE 语句不能删除某一个字段的值（可以使用 UPDATE，将该字段值置为 NULL 即可）
+- 当进行删除全部数据操作时，datagrip 会提示我们，询问是否确认删除，我们直接点击 Execute 即可
 
 ### 6、DQL
 
+DQL 英文全称是 Data Query Language（数据查询语言），数据查询语言，用来查询数据库中表的记录
 
+查询关键字：`SELECT`
 
+在一个正常的业务系统中，查询操作的频次是要远高于增删改的，在查询的过程中，可能还会涉及到条件、排序、分页等操作
 
+#### （1）基本语法
 
+```sql
+SELECT
+    字段列表
+FROM
+    表名列表
+WHERE
+    条件列表
+GROUP BY
+    分组字段列表
+HAVING
+    分组后条件列表
+ORDER BY
+    排序字段列表
+LIMIT
+    分页参数
+```
 
+将上面的完整语法进行拆分，分为以下几个部分：
 
+- 基本查询（不带任何条件）
+- 条件查询（WHERE）
+- 聚合函数（count、max、min、avg、sum）
+- 分组查询（group by）
+- 排序查询（order by）
+- 分页查询（limit）
 
+#### （2）基础查询（不带任何查询条件）
 
+##### 1）查询多个字段
 
+```sql
+SELECT 字段1, 字段2, 字段3 ... FROM 表名 ;
+SELECT * FROM 表名 ;
+```
 
+> 注意：* 号代表查询所有字段，在实际开发中尽量少用（不直观、影响效率）
 
+##### 2）字段设置别名
 
+```sql
+SELECT 字段1 [ AS 别名1 ] , 字段2 [ AS 别名2 ] ... FROM 表名;
+SELECT 字段1 [ 别名1 ] , 字段2 [ 别名2 ] ... FROM 表名;
+```
 
+##### 3）去除重复记录
 
+```sql
+SELECT DISTINCT 字段列表 FROM 表名;
+```
 
+案例：
 
+A. 查询指定字段 name，workno，age 并返回
 
+```sql
+select name,workno,age from emp;
+```
 
+B. 查询返回所有字段
 
+```sql
+select id ,workno,name,gender,age,idcard,workaddress,entrydate from emp;
+select * from emp;
+```
 
+C. 查询所有员工的工作地址，起别名
 
+```sql
+select workaddress as '工作地址' from emp;
+-- as 可以省略
+select workaddress '工作地址' from emp;
+```
+
+D. 查询公司员工的上班地址有哪些（不要重复）
+
+```sql
+select distinct workaddress '工作地址' from emp;
+```
+
+#### （3）条件查询
+
+##### 1）语法
+
+```sql
+SELECT 字段列表 FROM 表名 WHERE 条件列表 ;
+```
+
+##### 2）条件
+
+常用的比较运算符：
+
+| 比较运算符          | 功能                                     |
+| ------------------- | ---------------------------------------- |
+| >                   | 大于                                     |
+| >=                  | 大于等于                                 |
+| <                   | 小于                                     |
+| <=                  | 小于等于                                 |
+| =                   | 等于                                     |
+| <> 或 !=            | 不等于                                   |
+| BETWEEN ... AND ... | 在某个范围之内(含最小、最大值)           |
+| IN(...)             | 在in之后的列表中的值，多选一             |
+| LIKE 占位符         | 模糊匹配(_匹配单个字符，%匹配任意个字符) |
+| IS NULL             | 是NULL                                   |
+
+常用的逻辑运算符：
+
+| 逻辑运算符 | 功能                         |
+| ---------- | ---------------------------- |
+| AND 或 &&  | 并且（多个条件同时成立）     |
+| OR 或 \|\| | 或者（多个条件任意一个成立） |
+| NOT 或 !   | 非，不是                     |
+
+##### 案例：
+
+```sql
+-- A. 查询年龄等于 88 的员工
+select * from emp where age = 88;
+
+-- B. 查询年龄小于 20 的员工信息
+select * from emp where age < 20;
+
+-- C. 查询年龄小于等于 20 的员工信息
+select * from emp where age <= 20;
+
+-- D. 查询没有身份证号的员工信息
+select * from emp where idcard is null;
+
+-- E. 查询有身份证号的员工信息
+select * from emp where idcard is not null;
+
+-- F. 查询年龄不等于 88 的员工信息
+select * from emp where age != 88;
+select * from emp where age <> 88;
+
+-- G. 查询年龄在 15 岁(包含) 到 20 岁(包含)之间的员工信息
+select * from emp where age >=15 && age <=20;
+select * from emp where age >= 15 and age <= 20;
+select * from emp where age between 15 and 20;
+
+-- H. 查询性别为 女 且年龄小于 25 岁的员工信息
+select * from emp where gender = '女' and age < 25;
+
+-- I. 查询年龄等于 18 或 20 或 40 的员工信息
+select * from emp where age = 18 or age = 20 or age =40;
+select * from emp where age in(18,20,40);
+
+-- J. 查询姓名为两个字的员工信息
+select * from emp where name like '__';
+
+-- K. 查询身份证号最后一位是 X 的员工信息
+select * from emp where idcard like '%X';      # % : 前面是多少个字符都无所谓
+select * from emp where idcard like '___________X';
+```
+
+#### （4）聚合函数
+
+##### 1）介绍
+
+将一列数据作为一个整体，进行纵向计算
+
+##### 2）常见的聚合函数
+
+| 函数  | 功能     |
+| ----- | -------- |
+| count | 统计数量 |
+| max   | 最大值   |
+| min   | 最小值   |
+| avg   | 平均值   |
+| sum   | 求和     |
+
+##### 3）语法
+
+```sql
+SELECT 聚合函数(字段列表) FROM 表名 ;
+```
+
+> 注意：NULL 值是不参与所有聚合函数运算的
+
+##### 案例：
+
+A. 统计该企业员工数量
+
+```sql
+select count(*) from emp;        -- 统计的是总记录数
+select count(idcard) from emp;   -- 统计的是 idcard 字段不为 null 的记录数
+```
+
+对于 count 聚合函数，统计符合条件的总记录数，还可以通过 count（数字/字符串）的形式进行统计查询，比如：
+
+```sql
+select count(1) from emp;
+```
+
+> 对于count（*）、count（字段）、count(1) 的具体原理，我们在进阶篇中 SQL 优化部分会详细讲解，此处大家只需要知道如何使用即可
+
+B. 统计该企业员工的平均年龄
+
+```sql
+select avg(age) from emp;
+```
+
+C. 统计该企业员工的最大年龄
+
+```sql
+select max(age) from emp;
+```
+
+D. 统计该企业员工的最小年龄
+
+```sql
+select min(age) from emp;
+```
+
+E. 统计西安地区员工的年龄之和
+
+```sql
+select sum(age) from emp where workaddress = '西安';
+```
+
+#### （5）分组查询
+
+##### 1）语法
+
+```sql
+SELECT 字段列表 FROM 表名 [ WHERE 条件 ] GROUP BY 分组字段名 [ HAVING 分组后过滤条件 ];
+```
+
+##### 2）where 与 having 区别
+
+- 执行时机不同
+
+  where 是分组之前进行过滤，不满足 where 条件，不参与分组；而 having 是分组之后对结果进行过滤
+
+- 判断条件不同
+
+  where 不能对聚合函数进行判断，而 having 可以
+
+> 注意事项：
+>
+> - 分组之后，查询的字段一般为聚合函数和分组字段，查询其他字段无任何意义
+> - 执行顺序：where > 聚合函数 > having
+> - 支持多字段分组，具体语法为：group by columnA,columnB
+
+##### 案例： 
+
+A. 根据性别分组，统计男性员工和女性员工的数量
+
+```sql
+select gender, count(*) from emp group by gender ;
+```
+
+B. 根据性别分组，统计男性员工 和 女性员工的平均年龄
+
+```sql
+select gender, avg(age) from emp group by gender ;
+```
+
+C. 查询年龄小于 45 的员工，并根据工作地址分组，获取员工数量大于等于 3 的工作地址
+
+```sql
+select workaddress, count(*) address_count from emp where age < 45 group by workaddress having address_count >= 3;
+```
+
+D. 统计各个工作地址上班的男性及女性员工的数量
+
+```sql
+select workaddress, gender, count(*) '数量' from emp group by gender , workaddress;
+```
+
+#### （6）排序查询
+
+排序在日常开发中是非常常见的一个操作，有升序排序，也有降序排序
+
+##### 1）语法
+
+```sql
+SELECT 字段列表 FROM 表名 ORDER BY 字段1 排序方式1 , 字段2 排序方式2 ;
+```
+
+##### 2）排序方式
+
+- ASC：升序(默认值)
+- DESC：降序
+
+> 注意事项：
+>
+> - 如果是升序，可以不指定排序方式 ASC
+> - 如果是多字段排序，当第一个字段值相同时，才会根据第二个字段进行排序
+
+##### 案例：
+
+A. 根据年龄对公司的员工进行升序排序
+
+```sql
+select * from emp order by age asc;
+select * from emp order by age;
+```
+
+B. 根据入职时间，对员工进行降序排序
+
+```sql
+select * from emp order by entrydate desc;
+```
+
+C. 根据年龄对公司的员工进行升序排序，年龄相同，再按照入职时间进行降序排序
+
+```sql
+select * from emp order by age asc , entrydate desc;
+```
+
+#### （7）分页查询
+
+分页操作在业务系统开发时，也是非常常见的一个功能，我们在网站中看到的各种各样的分页条，后台都需要借助于数据库的分页操作
+
+##### 语法
+
+```sql
+SELECT 字段列表 FROM 表名 LIMIT 起始索引, 查询记录数 ;
+```
+
+> 注意事项：
+>
+> - 起始索引从 0 开始，起始索引 =（查询页码 - 1）* 每页显示记录数
+> - 分页查询是数据库的方言，不同的数据库有不同的实现，MySQL 中是 LIMIT
+> - 如果查询的是第一页数据，起始索引可以省略，直接简写为 limit 10
+
+##### 案例：
+
+A. 查询第 1 页员工数据，每页展示 10 条记录
+
+```sql
+select * from emp limit 0,10;
+
+select * from emp limit 10;
+```
+
+B. 查询第 2 页员工数据，每页展示 10 条记录 --------> (页码 - 1) * 页展示记录数
+
+```sql
+select * from emp limit 10,10;
+```
+
+#### （8）DQL执行顺序
+
+在讲解DQL语句的具体语法之前，我们已经讲解了DQL语句的完整语法，及编写顺序，接下来，我们要来说明的是DQL语句在执行时的执行顺序，也就是先执行哪一部分，后执行哪一部分
+
+##### 编写顺序
+
+```
+SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT
+```
+
+##### 执行顺序
+
+```
+FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT
+```
+
+![9](/images/mysql/9.png)
+
+##### 验证：
+
+查询年龄大于15的员工姓名、年龄，并根据年龄进行升序排序
+
+```sql
+select name , age from emp where age > 15 order by age asc;
+```
+
+在查询时，我们给 emp 表起一个别名 e，然后在 select 及 where 中使用该别名
+
+```sql
+select e.name , e.age from emp e where e.age > 15 order by age asc;
+```
+
+执行上述 SQL 语句后，我们看到依然可以正常的查询到结果，此时就说明：from 先执行，然后 where 和 select 执行。那  where 和 select 到底哪个先执行呢？
+
+此时，此时我们可以给 select 后面的字段起别名，然后在 where 中使用这个别名，然后看看是否可以执行成功
+
+```sql
+select e.name ename , e.age eage from emp e where eage > 15 order by age asc;
+```
+
+> 执行上述 SQL 报错：`Unknown column 'eage' in 'where clause'` 由此我们可以得出结论：**from 先执行，然后执行 where ， 再执行 select**
+
+接下来，我们再执行如下 SQL 语句，查看执行效果：
+
+```sql
+select e.name ename , e.age eage from emp e where e.age > 15 order by eage asc;
+```
+
+结果执行成功。那么也就验证了：**order by 是在select 语句之后执行的**
+
+综上所述，我们可以看到 DQL 语句的执行顺序为： **from → where → group by → having → select → order by → limit**
 
 ### 7、DCL
+
+DCL 英文全称是 Data Control Language（数据控制语言），用来管理数据库用户、控制数据库的访问权限
+
+DCL 主要控制两个方面：
+
+- 数据库有哪些用户可以访问
+- 每个用户具有哪些访问权限
+
+#### （1）DCL —— 管理用户
+
+##### 1）查询用户
+
+```sql
+select * from mysql.user;
+```
+
+查询结果字段说明：
+
+- Host：代表当前用户访问的主机，如果为`localhost`，仅代表只能够在当前本机访问，不可以远程访问
+
+- User：代表的是访问该数据库的用户名
+
+  > 在MySQL中需要通过Host和User来唯一标识一个用户
+
+##### 2）创建用户
+
+```sql
+CREATE USER '用户名'@'主机名' IDENTIFIED BY '密码';
+```
+
+实例：
+
+```sql
+-- 创建用户 itcast ，只能够在当前主机localhost访问，密码123456;
+create user 'itcast'@'localhost' identified by '123456';
+
+-- 创建用户 heima ，可以在任意主机访问该数据库，密码123456 ;
+create user 'heima'@'%' identified by '123456';
+
+-- 修改用户 heima 的访问密码为 1234 ;
+alter user 'heima'@'%' identified with mysql_native_password by '1234';
+
+-- 删除itcast@localhost用户
+drop user 'itcast'@'localhost';
+```
+
+##### 3）修改用户密码
+
+```sql
+ALTER USER '用户名'@'主机名' IDENTIFIED WITH mysql_native_password BY '新密码';
+```
+
+##### 4）删除用户
+
+```sql
+DROP USER '用户名'@'主机名';
+```
+
+> 注意事项： 在 MySQL 中需要通过`用户名@主机名`的方式，来唯一标识一个用户
 
 
 
@@ -647,7 +1125,51 @@ create table emp(
 
 
 
+## 数据准备
 
+```sql
+create table emp(
+    id int comment '编号',
+    workno varchar(10) comment '工号',
+    name varchar(10) comment '姓名',
+    gender char(1) comment '性别',
+    age tinyint unsigned comment '年龄',
+    idcard char(18) comment '身份证号',
+    workaddress varchar(50) comment '工作地址',
+    entrydate date comment '入职时间'
+) comment '员工表';
 
-
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (1, '00001', '柳岩666', '女', 20, '123456789012345678', '北京', '2000-01-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (2, '00002', '张无忌', '男', 18, '123456789012345670', '北京', '2005-09-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (3, '00003', '韦一笑', '男', 38, '123456789712345670', '上海', '2005-08-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (4, '00004', '赵敏', '女', 18, '123456757123845670', '北京', '2009-12-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (5, '00005', '小昭', '女', 16, '123456769012345678', '上海', '2007-07-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (6, '00006', '杨逍', '男', 28, '12345678931234567X', '北京', '2006-01-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (7, '00007', '范瑶', '男', 40, '123456789212345670', '北京', '2005-05-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (8, '00008', '黛绮丝', '女', 38, '123456157123645670', '天津', '2015-05-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (9, '00009', '范凉凉', '女', 45, '123156789012345678', '北京', '2010-04-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (10, '00010', '陈友谅', '男', 53, '123456789012345670', '上海', '2011-01-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (11, '00011', '张士诚', '男', 55, '123567897123465670', '江苏', '2015-05-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (12, '00012', '常遇春', '男', 32, '123446757152345670', '北京', '2004-02-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (13, '00013', '张三丰', '男', 88, '123656789012345678', '江苏', '2020-11-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (14, '00014', '灭绝', '女', 65, '123456719012345670', '西安', '2019-05-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (15, '00015', '胡青牛', '男', 70, '12345674971234567X', '西安', '2018-04-01');
+INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
+VALUES (16, '00016', '周芷若', '女', 18, null, '北京', '2012-06-01');
+```
 
