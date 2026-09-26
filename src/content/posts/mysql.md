@@ -1327,7 +1327,7 @@ ALTER TABLE 表名 ADD CONSTRAINT 外键名称 FOREIGN KEY (外键字段名) REF
 
 案例：
 
-为 emp 表的 dept_id 字段添加外键约束，关联 dept 表的主键 id
+为 emp 表的 dept_id 字段添加外键约束，关联 dept 表的主键 id，数据准备详见文末：[数据准备—外键约束部分](#外键约束部分)
 
 ```sql
 alter table emp add constraint fk_emp_dept_id foreign key (dept_id) references dept(id);
@@ -1889,6 +1889,8 @@ select e.*, d.* from (select * from emp where entrydate > '2006-01-01') e left j
 
 #### 数据准备
 
+数据准备详见文末：[数据准备—多表查询部分部分](#多表查询部分)
+
 ```sql
 create table salgrade(
     grade int,
@@ -2409,6 +2411,515 @@ xxx.sdi：存储表结构信息
 
 ## 八、MySQL 进阶之 —— 索引
 
+### 1、Linux 系统安装 MySQL
+
+由于在日常生产环境中绝大多数都是使用 Linux 系统，所以以下内容都是基于 Linux 系统的讲解
+
+### 2、索引概述
+
+#### 1）介绍
+
+索引（index）是帮助 MySQL **高效获取数据**的**数据结构**（有序）。在数据之外，数据库系统还维护着满足特定查找算法的数据结构，这些数据结构以某种方式引用（指向）数据， 这样就可以在这些数据结构上实现高级查找算法，这种数据结构就是索引
+
+![23](/images/mysql/23.png)
+
+#### 2）无索引 VS 有索引
+
+**无索引：**
+
+![24](/images/mysql/24.png)
+
+在无索引情况下，就需要从第一行开始扫描，一直扫描到最后一行，我们称之为全表扫描，性能很低
+
+**有索引：**
+
+如果我们针对于这张表建立了索引，假设索引结构就是二叉树，那么也就意味着，会对 age 这个字段建立一个二叉树的索引结构
+
+![25](/images/mysql/25.png)
+
+此时我们在进行查询时，只需要扫描三次就可以找到数据了，极大的提高的查询的效率
+
+> 备注： 
+>
+> 这里我们只是假设索引的结构是二叉树，介绍一下索引的大概原理，只是一个示意图，并不是索引的真实结构
+
+#### 2）索引特点
+
+| 优势                                                         | 劣势                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| 提高数据**检索**的效率，降低数据库的 IO 成本                 | 索引列也是要占用空间的                                       |
+| 通过索引列对数据进行排序，降低数据**排序**的成本，降低 CPU 的消耗 | 索引大大提高了查询效率，同时却也降低更新表的速度，如对表进行 INSERT、UPDATE、DELETE 时，效率降低 |
+
+> 简单一句话：
+>
+> 索引可以提高查询以及排序效率，但会占用空间和降低表更新效率，但是它的劣势可以忽略
+
+### 3、索引结构
+
+#### 1）概述
+
+MySQL 的索引是在存储引擎层实现的，不同的存储引擎有不同的索引结构，主要包含以下几种：
+
+| 索引结构             | 描述                                                         |
+| -------------------- | ------------------------------------------------------------ |
+| B+Tree 索引          | 最常见的索引类型，大部分引擎都支持 B+ 树索引                 |
+| Hash 索引            | 底层数据结构是用哈希表实现的，只有精确匹配索引列的查询才有效，不支持范围查询 |
+| R-tree (空间索引)    | 空间索引是 MyISAM 引擎的一个特殊索引类型，主要用于地理空间数据类型，通常使用较少 |
+| Full-text (全文索引) | 是一种通过建立倒排索引，快速匹配文档的方式。类似于Lucene，Solr，ES |
+
+不同的存储引擎对于索引结构的支持情况：
+
+| 索引        | InnoDB           | MyISAM | Memory |
+| ----------- | ---------------- | ------ | ------ |
+| B+tree 索引 | 支持             | 支持   | 支持   |
+| Hash 索引   | 不支持           | 不支持 | 支持   |
+| R-tree 索引 | 不支持           | 支持   | 不支持 |
+| Full-text   | 5.6 版本之后支持 | 支持   | 不支持 |
+
+> 注意： 
+>
+> 我们平常所说的索引，如果没有特别指明，都是指 B+ 树结构组织的索引
+
+### 4、索引结构
+
+#### 1）二叉树
+
+在讲 B-Tree 之前，我们先讲一下二叉树
+
+假如说 MySQL 的索引结构采用二叉树的数据结构，比较理想的结构如下：
+
+![26](/images/mysql/26.png)
+
+如果主键是顺序插入的，则会形成一个单向链表，结构如下：
+
+![27](/images/mysql/27.png)
+
+所以，如果选择二叉树作为索引结构，会存在以下缺点：
+
+- 顺序插入时，会形成一个链表，查询性能大大降低
+- 大数据量情况下，层级较深，检索速度慢
+
+此时大家可能会想到，我们可以选择红黑树，红黑树是一颗自平衡二叉树，那这样即使是顺序插入数据，最终形成的数据结构也是一颗平衡的二叉树，结构如下：
+
+![28](/images/mysql/28.png)
+
+但是，即使如此，由于红黑树也是一颗二叉树，所以也会存在一个缺点：
+
+- 大数据量情况下，层级较深，检索速度慢
+
+所以，在 MySQL 的索引结构中，并没有选择二叉树或者红黑树，而选择的是 B+Tree
+
+#### 2）B-Tree
+
+在详解 B+Tree 之前，先来介绍一个 B-Tree
+
+B-Tree，B 树是一种多路平衡查找树，相对于二叉树，B 树每个节点可以有多个分支，即多叉
+
+以一颗最大度数（max-degree，树的度数指的是一个节点的子节点个数）为 5（5阶）的 b-tree 为例，那这个 B 树每个节点最多存储 4 个 key，5 个指针：
+
+![29](/images/mysql/29.png)
+
+我们可以通过一个数据结构可视化的网站来简单演示一下：[B-Trees]( https://www.cs.usfca.edu/~galles/visualization/BTree.html)
+
+```
+设置 Max.Degree = 5，然后插入一组数据： 
+100 65 169 368 900 556 780 35 215 1200 234 888 158 90 1000 88 120 268 250 
+观察一些数据插入过程中，节点的变化情况
+```
+
+![30](/images/mysql/30.png)
+
+特点：
+
+- 5 阶的 B 树，每一个节点最多存储 4 个 key，对应 5 个指针
+- 一旦节点存储的 key 数量到达 5，就会裂变，中间元素向上分裂
+- 在 B 树中，非叶子节点和叶子节点都会存放数据
+
+#### 3）B+Tree
+
+B+Tree 是 B-Tree 的变种，我们以一颗最大度数（max-degree）为 4（4阶）的 b+tree 为例，来看一下其结构示意图：
+
+![31](/images/mysql/31.png)
+
+我们可以看到两部分：
+
+- 绿色框框起来的部分，是索引部分，仅仅起到索引数据的作用，不存储数据
+- 红色框框起来的部分，是数据存储部分，在其叶子节点中要存储具体的数据
+
+通过一个数据结构可视化网站演示：[B+ Trees](https://www.cs.usfca.edu/~galles/visualization/BPlusTree.html)
+
+```
+设置 Max.Degree = 5，然后插入一组数据： 
+100 65 169 368 900 556 780 35 215 1200 234 888 158 90 1000 88 120 268 250 
+观察一些数据插入过程中，节点的变化情况
+```
+
+![32](/images/mysql/32.png)
+
+最终我们看到，B+Tree 与 B-Tree 相比，主要有以下三点区别：
+
+- 所有的数据都会出现在叶子节点
+- 叶子节点形成一个单向链表
+- 非叶子节点仅仅起到索引数据作用，具体的数据都是在叶子节点存放的
+
+#### 4）MySQL 中的 B+Tree
+
+MySQL 索引数据结构对经典的 B+Tree 进行了优化。在原 B+Tree 的基础上，增加一个指向相邻叶子节点的链表指针，就形成了带有顺序指针的 B+Tree，提高区间访问的性能，利于排序
+
+![33](/images/mysql/33.png)
+
+#### 5）Hash 索引
+
+##### 1）结构 
+
+哈希索引就是采用一定的 hash 算法，将键值换算成新的 hash 值，映射到对应的槽位上，然后存储在 hash 表中
+
+![34](/images/mysql/34.png)
+
+如果两个（或多个）键值，映射到一个相同的槽位上，他们就产生了 hash 冲突（也称为 hash 碰撞），可以通过链表来解决
+
+![35](/images/mysql/35.png)
+
+##### 2）特点 
+
+- Hash 索引只能用于对等比较（=，in），不支持范围查询（between，>，<，...）
+- 无法利用索引完成排序操作 
+- 查询效率高，通常（不存在 hash 冲突的情况）只需要一次检索就可以了，效率通常要高于 B+tree 索引
+
+##### 3）存储引擎支持 
+
+在 MySQL 中，支持 hash 索引的是 Memory 存储引擎
+
+而 InnoDB 中具有自适应 hash 功能，hash 索引是 InnoDB 存储引擎根据 B+Tree 索引在指定条件下自动构建的
+
+> 思考题：为什么 InnoDB 存储引擎选择使用 B+tree 索引结构？
+>
+> A．相对于二叉树，层级更少，搜索效率高
+>
+> B．对于 B-tree，无论是叶子节点还是非叶子节点，都会保存数据，这样导致一页中存储的键值减少，指针跟着减少，要同样保存大量数据，只能增加树的高度，导致性能降低
+>
+> C．相对 Hash 索引，B+tree 支持范围匹配及排序操作
+
+### 5、索引分类
+
+#### （1）分类
+
+在 MySQL 数据库，将索引的具体类型主要分为以下几类：
+
+| 分类     | 含义                                                 | 特点                     | 关键字   |
+| -------- | ---------------------------------------------------- | ------------------------ | -------- |
+| 主键索引 | 针对于表中主键创建的索引                             | 默认自动创建，只能有一个 | PRIMARY  |
+| 唯一索引 | 避免同一个表中某数据列中的值重复                     | 可以有多个               | UNIQUE   |
+| 常规索引 | 快速定位特定数据                                     | 可以有多个               |          |
+| 全文索引 | 全文索引查找的是文本中的关键词，而不是比较索引中的值 | 可以有多个               | FULLTEXT |
+
+#### （2）聚集索引&二级索引
+
+在 InnoDB 存储引擎中，根据索引的存储形式，又可以分为以下两种：
+
+| 分类                      | 含义                                                       | 特点             |
+| ------------------------- | ---------------------------------------------------------- | ---------------- |
+| 聚集索引(Clustered Index) | 将数据存储与索引放到了一块，索引结构的叶子节点保存了行数据 | 必须有，只有一个 |
+| 二级索引(Secondary Index) | 将数据与索引分开存储，索引结构的叶子节点关联的是对应的主键 | 可以存在多个     |
+
+二级索引又称辅助索引或者非聚集索引
+
+聚集索引选取规则：
+
+- 如果存在主键，主键索引就是聚集索引
+
+- 如果不存在主键，将使用第一个唯一（UNIQUE）索引作为聚集索引
+- 如果表没有主键，或没有合适的唯一索引，则 InnoDB 会自动生成一个 rowid 作为隐藏的聚集索引
+
+聚集索引和二级索引的具体结构如下：
+
+![36](/images/mysql/36.png)
+
+- 聚集索引的叶子节点下挂的是这一行的数据
+- 二级索引的叶子节点下挂的是该字段值对应的主键值
+
+当我们执行如下的 SQL 语句时：
+
+```sql
+select * from user where name = 'Arm';
+```
+
+![37](/images/mysql/37.png)
+
+具体过程如下：
+
+ ①．由于是根据 name 字段进行查询，所以先根据 name='Arm' 到 name 字段的二级索引中进行匹配查找。但是在二级索引中只能查找到 Arm 对应的主键值 10
+
+②．由于查询返回的数据是 *，所以此时，还需要根据主键值 10，到聚集索引中查找 10 对应的记录，最终找到 10 对应的行 row
+
+③．最终拿到这一行的数据，直接返回即可
+
+> 这个过程有一个专有名词：`回表查询`
+>
+> 这种先到二级索引中查找数据，找到主键值，然后再到聚集索引中根据主键值，获取数据的方式，就称之为回表查询
+
+> 思考题：
+>
+> 以下两条 SQL 语句，那个执行效率高？为什么？ 
+>
+> A. select * from user where id = 10 ;
+>
+> B. select * from user where name = 'Arm' ; 
+>
+> 备注：id 为主键，name 字段创建的有索引
+>
+> 解答： 
+>
+> A 语句的执行性能要高于 B 语句。 因为A语句直接走聚集索引，直接返回数据。 而 B 语句需要先查询 name 字段的二级索引，然后再查询聚集索引，也就是需要进行回表查询
+
+> 思考题：
+>
+> InnoDB 主键索引的 B+tree 高度为多高呢？
+>
+> 假设： 一行数据大小为 1k，一页中可以存储 16 行这样的数据。InnoDB 的指针占用 6 个字节的空间，主键即使为 bigint，占用字节数为 8
+>
+> 若高度为 2： n * 8 + (n + 1) * 6 = 16 * 1024，算出 n 约为 1170 1171* 16 = 18736 也就是说，如果树的高度为 2，则可以存储 18000 多条记录
+>
+> 若高度为 3： 1171 * 1171 * 16 = 21939856 也就是说，如果树的高度为 3，则可以存储 2200w 左右的记录
+
+### 6、索引语法
+
+#### （1）创建索引
+
+```sql
+CREATE [ UNIQUE | FULLTEXT ] INDEX index_name ON table_name ( index_col_name,... );
+```
+
+- 一个索引只包含**单个列** → 单列索引
+- 一个索引包含**多个列** → 联合（复合）索引
+
+#### （2）查看索引
+
+```sql
+SHOW INDEX FROM table_name ;
+# 或
+SHOW INDEX FROM table_name\G ;
+```
+
+#### （3）删除索引
+
+```sql
+DROP INDEX index_name ON table_name ;
+```
+
+#### （4）案例
+
+先来创建一张表 tb_user，并且查询测试数据，数据准备详见文末：[数据准备—索引语法部分](#索引语法部分)
+
+A. name 字段为姓名字段，该字段的值可能会重复，为该字段创建索引
+
+```sql
+CREATE INDEX idx_user_name ON tb_user(name);
+```
+
+`index_name` 一般为 idx_ 表名_ 字段名
+
+B. phone 手机号字段的值，是非空，且唯一的，为该字段创建唯一索引
+
+```sql
+CREATE UNIQUE INDEX idx_user_phone ON tb_user(phone);
+```
+
+C. 为 profession、age、status 创建联合索引
+
+```sql
+CREATE INDEX idx_user_pro_age_sta ON tb_user(profession, age, status);
+```
+
+D. 为 email 建立合适的索引来提升查询效率
+
+```sql
+CREATE INDEX idx_email ON tb_user(email);
+```
+
+E. 删除 idx_email 索引
+
+```sql
+DROP INDEX idx_email ON tb_user;
+```
+
+### 7、SQL 性能分析
+
+#### （1）SQL 执行频率
+
+MySQL 客户端连接成功后，通过 `show [session|global] status` 命令可以提供服务器状态信息。通过如下指令，可以查看当前数据库的 INSERT、UPDATE、DELETE、SELECT 的访问频次：
+
+```sql
+-- session 是查看当前会话 
+-- global 是查询全局数据 
+SHOW GLOBAL STATUS LIKE 'Com_______';
+```
+
+![38](/images/mysql/38.png)
+
+- **Com_delete**：删除次数
+- **Com_insert**：插入次数
+- **Com_select**：查询次数
+- **Com_update**：更新次数
+
+> 通过上述指令，我们可以查看到当前数据库到底是以查询为主，还是以增删改为主，从而为数据库优化提供参考依据：
+>
+> - 如果是以增删改为主，我们可以考虑不对其进行索引的优化
+> - 如果是以查询为主，那么就要考虑对数据库的索引进行优化了
+
+#### （2）慢查询日志
+
+慢查询日志记录了所有执行时间超过指定参数（long_query_time，单位：秒，默认10秒）的所有 SQL 语句的日志
+
+MySQL 的慢查询日志默认没有开启，我们可以查看一下系统变量 `slow_query_log`
+
+```sql
+show variables like 'slow_query_log';
+```
+
+如果要开启慢查询日志，需要在 MySQL 的配置文件（/etc/my.cnf）中配置如下信息：
+
+```shell
+# 开启 MySQL 慢日志查询开关
+slow_query_log=1
+# 设置慢日志的时间为 2 秒，SQL 语句执行时间超过 2 秒，就会视为慢查询，记录慢查询日志
+long_query_time=2
+```
+
+配置完毕之后，通过以下指令重新启动 MySQL 服务器进行测试，查看慢日志文件中记录的信息 `/var/lib/mysql/localhost-slow.log`
+
+```shell
+systemctl restart mysqld
+```
+
+此时慢查询日志就已经打开了，我们可以通过如下命令实时显示日志内容：
+
+```shell
+tail -f localhost-slow.log
+```
+
+#### （3）profile详情
+
+show profiles 能够在做 SQL 优化时帮助我们了解时间都耗费到哪里去了。通过 have_profiling 参数，能够看到当前 MySQL 是否支持 profile 操作：
+
+```sql
+SELECT @@have_profiling ;
+```
+
+通过 set 语句在 session / global 级别开启 profiling：
+
+```sql
+SET profiling = 1;
+```
+
+接下来我们所执行的 SQL 语句，都会被 MySQL 记录，并记录执行时间消耗到哪儿去了
+
+我们直接执行如下的 SQL 语句：
+
+```sql
+select * from tb_user;
+select * from tb_user where id = 1;
+select * from tb_user where name = '白起';
+select count(*) from tb_sku;
+```
+
+执行一系列的业务 SQL 的操作，然后通过如下指令查看指令的执行耗时：
+
+```sql
+-- 查看每一条 SQL 的耗时基本情况
+show profiles;
+
+-- 查看指定 query_id 的 SQL 语句各个阶段的耗时情况
+show profile for query query_id;
+
+-- 查看指定 query_id 的 SQL 语句 CPU 的使用情况
+show profile cpu for query query_id;
+```
+
+#### （4）explain 执行计划
+
+EXPLAIN 或者 DESC 命令获取 MySQL 如何执行 SELECT 语句的信息，包括在 SELECT 语句执行过程中表如何连接和连接的顺序
+
+语法：
+
+```sql
+-- 直接在select语句之前加上关键字 explain / desc
+EXPLAIN SELECT 字段列表 FROM 表名 WHERE 条件;
+```
+
+![39](/images/mysql/39.png)
+
+Explain 执行计划中各个字段的含义：
+
+| 字段             | 含义                                                         |
+| ---------------- | ------------------------------------------------------------ |
+| **id**           | select 查询的序列号，表示查询中执行 select 子句或者是操作表的顺序（id 相同，执行顺序从上到下；id 不同，值越大，越先执行） |
+| **select_type**  | 表示 SELECT 的类型，常见的取值有 SIMPLE（简单表，即不使用表连接或者子查询）、PRIMARY（主查询，即外层的查询）、UNION（UNION 中的第二个或者后面的查询语句）、SUBQUERY（SELECT/WHERE 之后包含了子查询）等 |
+| **type**         | 表示连接类型，性能由好到差的连接类型为 NULL、system、const、eq_ref、ref、range、index、all |
+| **possible_key** | 显示可能应用在这张表上的索引，一个或多个                     |
+| **key**          | 实际使用的索引，如果为 NULL，则没有使用索引                  |
+| **key_len**      | 表示索引中使用的字节数，该值为索引字段最大可能长度，并非实际使用长度，在不损失精确性的前提下，长度越短越好 |
+| **rows**         | MySQL 认为必须要执行查询的行数，在 innodb 引擎的表中，是一个估计值，可能并不总是准确的 |
+| **filtered**     | 表示返回结果的行数占需读取行数的百分比，filtered 的值越大越好 |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### 8、索引使用
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### 9、索引设计原则
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2545,7 +3056,7 @@ xxx.sdi：存储表结构信息
 
 ## 数据准备
 
-### 1、SQL 部分
+### 1、SQL 部分<a id="SQL部分"></a>
 
 ```sql
 create table emp(
@@ -2593,7 +3104,7 @@ INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
 VALUES (16, '00016', '周芷若', '女', 18, null, '北京', '2012-06-01');
 ```
 
-### 2、外键约束部分
+### 2、外键约束部分<a id="外键约束部分"></a>
 
 ```sql
 create table dept(
@@ -2624,7 +3135,7 @@ VALUES
     (6, '小昭', 19, '程序员鼓励师',6600, '2004-10-12', 2,1);
 ```
 
-### 3、多表查询部分
+### 3、多表查询部分<a id="多表查询部分"></a>
 
 ```sql
 create table dept(
@@ -2667,9 +3178,46 @@ INSERT INTO emp (id, name, age, job,salary, entrydate, managerid, dept_id) VALUE
     (17, '陈友谅', 42, null,2000,'2011-10-12',1,null);
 ```
 
+### 4、索引语法部分<a id="索引语法部分"></a>
 
+```sql
+create table tb_user(
+    id int primary key auto_increment comment '主键',
+    name varchar(50) not null comment '用户名',
+    phone varchar(11) not null comment '手机号',
+    email varchar(100) comment '邮箱',
+    profession varchar(11) comment '专业',
+    age tinyint unsigned comment '年龄',
+    gender char(1) comment '性别，1：男，2：女',
+    status char(1) comment '状态',
+    createtime datetime comment '创建时间'
+) comment '系统用户表';
 
-
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('吕布','17799990000','lvbu666@163.com','软件工程',23,'1','6','2001-02-02 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('曹操','17799990001','caocao666@qq.com','通讯工程',33,'1','0','2001-03-05 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('赵云','17799990002','1779999002@139.com','英语',34,'1','2','2002-03-02 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('孙悟空','17799990003','1779999003@sina.com','工程造价',54,'1','0','2001-07-02 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('花木兰','17799990004','199807298@sina.com','软件工程',23,'2','1','2001-04-22 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('大乔','17799990005','daqiao666@sina.com','舞蹈',22,'2','0','2001-02-07 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('露娜','17799990006','luna_love@sina.com','应用数学',24,'2','0','2001-02-08 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('程咬金','17799990007','chengyaojin@163.com','化工',38,'1','5','2001-05-23 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('项羽','17799990008','xiaoyu666@qq.com','金属材料',43,'1','0','2001-09-18 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('白起','17799990009','baiqi666@sina.com','机械工程及其自动化',27,'1','2','2001-08-16 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('韩信','17799990010','hanxin520@163.com','无机非金属材料工程',27,'1','0','2001-06-12 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('荆轲','17799990011','jingke123@163.com','会计',29,'1','0','2001-05-11 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('兰陵王','17799990012','lanlinwang666@126.com','工程造价',44,'1','1','2001-04-09 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('狂铁','17799990013','kuangtie@sina.com','应用数学',43,'1','2','2001-04-10 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('貂蝉','17799990014','849589483748@qq.com','软件工程',40,'2','3','2001-02-12 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('妲己','17799990015','2783238293@qq.com','软件工程',31,'2','0','2001-01-30 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('芈月','17799990016','xiaomin2001@sina.com','工业经济',35,'2','0','2000-05-03 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('嬴政','17799990017','88394343428@qq.com','化工',38,'1','1','2001-08-08 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('狄仁杰','17799990018','jujiam181668@163.com','国际贸易',30,'1','0','2007-03-12 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('安琪拉','17799990019','jdodmlh@126.com','城市规划',51,'2','0','2001-08-15 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('典韦','17799990020','ycaunanjian@163.com','城市规划',52,'1','2','2000-04-12 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('廉颇','17799990021','lianpo321@126.com','土木工程',19,'1','3','2002-07-18 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('后羿','17799990022','altycj2000@139.com','城市园林',20,'1','0','2002-03-10 00:00:00');
+INSERT INTO tb_user (name, phone, email, profession, age, gender, status, createtime) VALUES ('姜子牙','17799990023','374838448@qq.com','工程造价',29,'1','4','2003-05-26 00:00:00');
+```
 
 
 
