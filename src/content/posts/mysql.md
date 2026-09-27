@@ -2945,7 +2945,7 @@ explain select * from tb_user where profession = '软件工程' and age >= 30 an
 
 #### （3）索引失效情况
 
-##### （1）索引列运算
+##### 1）索引列运算
 
 不要在索引列上进行运算操作，索引将失效
 
@@ -2963,7 +2963,7 @@ B. 当根据 phone 字段进行函数运算操作之后，索引失效
 explain select * from tb_user where substring(phone,10,2) = '15';
 ```
 
-##### （2）字符串不加引号
+##### 2）字符串不加引号
 
 字符串类型字段使用时，不加引号，索引将失效
 
@@ -2974,7 +2974,7 @@ explain select * from tb_user where phone = 17799990015;
 
 经过上面两组示例，我们会发现：如果字符串不加单引号，对于查询结果没什么影响，但是数据库存在隐式类型转换，索引将失效
 
-##### （3）模糊查询
+##### 3）模糊查询
 
 如果仅仅是尾部模糊匹配，索引不会失效。如果是头部模糊匹配，索引失效
 
@@ -2986,7 +2986,7 @@ explain select * from tb_user where profession like '%工%';
 
 经过上述的测试，我们发现：在 like 模糊查询中，在关键字后面加 %，索引可以生效。而如果在关键字前面加了 %，索引将会失效
 
-##### （4）or 连接条件
+##### 4）or 连接条件
 
 用 or 分割开的条件，如果 or 前的条件中的列有索引，而后面的列中没有索引，那么涉及的索引都不会被用到
 
@@ -3000,7 +3000,7 @@ explain select * from tb_user where id = 10 or age = 23;
 create index idx_user_age on tb_user(age);
 ```
 
-##### （5）数据分布影响
+##### 5）数据分布影响
 
 如果 MySQL 评估使用索引比全表更慢，则不使用索引
 
@@ -3013,89 +3013,257 @@ MySQL 在查询时，会评估使用索引的效率与走全表扫描的效率�
 
 #### （4）SQL 提示
 
+SQL 提示，是优化数据库的一个重要手段，简单来说，就是在 SQL 语句中加入一些人为的提示来达到优化操作的目的
 
+我们在查询的时候可以借助于 MySQL 的 SQL 提示来指定使用哪个索引
 
+##### 1）use index 
 
+建议 MySQL 使用哪一个索引完成此次查询（仅仅是建议，mysql 内部还会再次进行评估）
 
+```sql
+explain select * from tb_user use index(idx_user_pro) where profession = '软件工程';
+```
 
+##### 2）ignore index 
 
+忽略指定的索引
 
+```sql
+explain select * from tb_user ignore index(idx_user_pro) where profession = '软件工程';
+```
 
+##### 3）force index 
 
+强制使用索引
 
+```sql
+explain select * from tb_user force index(idx_user_pro) where profession = '软件工程';
+```
 
+##### 示例：
 
-#### （5）覆盖索引 & 回表
+```sql
+explain select * from tb_user use index(idx_user_pro) where profession = '软件工程';
+explain select * from tb_user ignore index(idx_user_pro) where profession = '软件工程';
+```
 
+#### （5）覆盖索引 & 回表查询
 
+覆盖索引：查询使用了索引，并且需要返回的列，在该索引中已经全部能够找到
 
+尽量使用覆盖索引，减少 `select * `
 
+接下来，我们来看一组 SQL 的执行计划，看看执行计划的差别，然后再来具体做一个解析
 
+```sql
+explain select id, profession from tb_user where profession = '软件工程' and age = 31 and status = '0' ;
+explain select id,profession,age, status from tb_user where profession = '软件工程' and age = 31 and status = '0' ;
+explain select id,profession,age, status, name from tb_user where profession = '软件工程' and age = 31 and status = '0' ;
+explain select * from tb_user where profession = '软件工程' and age = 31 and status = '0';
+```
 
+从上述的执行计划我们可以看到，这四条 SQL 语句的执行计划前面所有的指标都是一样的，看不出来差异。但是此时，我们主要关注的是后面的 Extra，前面两条 SQL 的结果为 Using where; Using Index ; 而后面两条SQL的结果为 Using index condition
 
+| Extra                    | 含义                                                         |
+| ------------------------ | ------------------------------------------------------------ |
+| Using where; Using Index | 查找使用了索引，但是需要的数据都在索引列中能找到，所以不需要回表查询数据 |
+| Using index condition    | 查找使用了索引，但是需要**回表查询数据**                     |
 
+因为，在 tb_user 表中有一个联合索引 idx_user_pro_age_sta，该索引关联了三个字段 profession、age、status，而这个索引也是一个二级索引，所以叶子节点下面挂的是这一行的主键 id。 所以当我们查询返回的数据在 id、profession、age、status 之中，则直接走二级索引直接返回数据了。 如果超出这个范围，就需要拿到主键 id，再去扫描聚集索引，再获取额外的数据了，这个过程就是回表。 而我们如果一直使用 select * 查询返回所有字段值，很容易就会造成回表查询（除非是根据主键查询，此时只会扫描聚集索引）
 
+为了更清楚的理解什么是覆盖索引，什么是回表查询，我们一起来看下面的这组 SQL 的执行过程：
 
+A. 表结构及索引示意图：
 
+![42](/images/mysql/42.png)
 
+id 是主键，是一个聚集索引。 name 字段建立了普通索引，是一个二级索引（辅助索引）
 
+B. 执行 SQL： `select * from tb_user where id = 2;` 
 
+![43](/images/mysql/43.png)
+
+根据 id 查询，直接走聚集索引查询，一次索引扫描，直接返回数据，性能高
+
+C. 执行 SQL： `select id,name from tb_user where name = 'Arm';` 
+
+![44](/images/mysql/44.png)
+
+虽然是根据 name 字段查询，查询二级索引，但是由于查询返回在字段为 id，name，在 name 的二级索引中，这两个值都是可以直接获取到的，因为覆盖索引，所以不需要回表查询，性能高
+
+D. 执行 SQL： `select id,name,gender from tb_user where name = 'Arm';` 
+
+![45](/images/mysql/45.png)
+
+由于在 name 的二级索引中，不包含 gender，所以需要两次索引扫描，也就是需要回表查询，性能相对较差一点
+
+> 思考题：
+>
+> 一张表，有四个字段（id, username, password, status），由于数据量大，需要对以下 SQL 语句进行优化，该如何进行才是最优方案？
+>
+> ```sql
+> select id,username,password from tb_user where username = 'itcast';
+> ```
+>
+> 答案：
+>
+> 针对于 username, password 建立联合索引，sql 为：
+>
+> ```sql
+> create index idx_user_name_pass on tb_user(username,password);
+> ```
+>
+> 这样可以避免上述的 SQL 语句，在查询的过程中出现回表查询
 
 #### （6）前缀索引
 
+当字段类型为字符串（varchar，text，longtext 等）时，有时候需要索引很长的字符串，这会让索引变得很大，查询时，浪费大量的磁盘 IO，影响查询效率
 
+此时可以只将字符串的一部分前缀，建立索引，这样可以大大节约索引空间，从而提高索引效率
 
+##### 1）语法
 
+```sql
+create index idx_xxxx on table_name(column(n));
+```
 
+##### 2）前缀长度
 
+可以根据索引的选择性来决定，而选择性是指不重复的索引值（基数）和数据表的记录总数的比值，索引选择性越高则查询效率越高，唯一索引的选择性是 1，这是最好的索引选择性，性能也是最好的
+$$
+选择性 = \frac{不重复的索引值（基数）}{数据表的记录总数}
+$$
 
+$$
+查询效率 \propto 选择性
+$$
 
+```sql
+select count(distinct email) / count(*) from tb_user ;                  
+# 求选择性: 1
+select count(distinct substring(email,1,10)) / count(*) from tb_user ;   
+# 截取前 10 个字符的选择性: 1
+select count(distinct substring(email,1,5)) / count(*) from tb_user ;   
+# 截取前 5 个字符的选择性: 0.9583
+select count(distinct substring(email,1,4)) / count(*) from tb_user ;   
+# 截取前 4 个字符的选择性: 0.9167
+```
 
+根据实际业务选择：
 
+- 如果尽可能选择性高：截取前 10 个字符
 
+  ```sql
+  create index idx_email_10 on tb_user(email(10));
+  ```
 
+- 如果需要平衡选择性与索引体积：截取前 5 个字符
 
+  ```sql
+  create index idx_email_5 on tb_user(email(5));
+  ```
 
+##### 3） 前缀索引的查询流程
+
+![46](/images/mysql/46.png)
 
 #### （7）单列 & 联合索引
 
+- 单列索引：即一个索引只包含单个列 
+- 联合索引：即一个索引包含了多个列
 
+在业务场景中，如果存在多个查询条件，考虑针对于查询字段建立索引时，建议建立联合索引，而非单列索引
 
+如果查询使用的是联合索引，具体的结构示意图如下：
 
-
-
-
-
-
-
-
-
-
-
-
-
+![47](/images/mysql/47.png)
 
 ### 9、索引设计原则
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+- 针对**数据量较大**（超过一百万），且**查询比较频繁**的表建立索引
+- 针对于常作为**查询条件（where）**、**排序（order by）**、**分组（group by）**操作的字段建立索引
+- 尽量选择**区分度高**的列作为索引，尽量建立唯一索引，区分度越高，使用索引的效率越高
+- 如果是字符串类型的字段，字段的长度较长，可以针对于字段的特点，建立**前缀索引**
+- 尽量使用**联合索引**，减少单列索引，查询时，联合索引很多时候可以覆盖索引，节省存储空间，避免回表，提高查询效率
+- 要**控制索引的数量**，索引并不是多多益善，索引越多，维护索引结构的代价也就越大，会影响增删改的效率
+- 如果索引列不能存储 NULL 值，请在创建表时使用 NOT NULL 约束它。当优化器知道每列是否包含 NULL 值时，它可以更好地确定哪个索引最有效地用于查询
 
 ## 九、MySQL 进阶之 —— SQL优化
 
+### 1、插入数据优化
 
+
+
+
+
+
+
+
+
+### 2、主键优化
+
+
+
+
+
+
+
+
+
+
+
+### 3、order by 优化
+
+
+
+
+
+
+
+
+
+
+
+### 4、group by 优化
+
+
+
+
+
+
+
+
+
+
+
+### 5、limit 优化
+
+
+
+
+
+
+
+
+
+
+
+### 6、count 优化
+
+
+
+
+
+
+
+
+
+
+
+
+
+### 7、update 优化
 
 
 
@@ -3207,7 +3375,7 @@ MySQL 在查询时，会评估使用索引的效率与走全表扫描的效率�
 
 
 
-## 十八、MySQL 运维之 —— 读写分离
+## 十九、MySQL 运维之 —— 读写分离
 
 
 
@@ -3223,9 +3391,9 @@ MySQL 在查询时，会评估使用索引的效率与走全表扫描的效率�
 
 ## 数据准备
 
-### 1、SQL 部分
-
 <a id="SQL部分"></a>
+
+### 1、SQL 部分
 
 ```sql
 create table emp(
@@ -3273,9 +3441,9 @@ INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
 VALUES (16, '00016', '周芷若', '女', 18, null, '北京', '2012-06-01');
 ```
 
-### 2、外键约束部分
-
 <a id="外键约束部分"></a>
+
+### 2、外键约束部分
 
 ```sql
 create table dept(
@@ -3306,9 +3474,9 @@ VALUES
     (6, '小昭', 19, '程序员鼓励师',6600, '2004-10-12', 2,1);
 ```
 
-### 3、多表查询部分
-
 <a id="多表查询部分"></a>
+
+### 3、多表查询部分
 
 ```sql
 create table dept(
@@ -3351,9 +3519,9 @@ INSERT INTO emp (id, name, age, job,salary, entrydate, managerid, dept_id) VALUE
     (17, '陈友谅', 42, null,2000,'2011-10-12',1,null);
 ```
 
-### 4、索引语法部分
-
 <a id="索引语法部分"></a>
+
+### 4、索引语法部分
 
 ```sql
 create table tb_user(
