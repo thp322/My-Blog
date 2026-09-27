@@ -101,7 +101,7 @@ mysql  [-h 127.0.0.1]  [-P 3306]  -u root -p
 
 > 注意：
 >
->  使用这种方式进行连接时，需要安装完毕后配置PATH环境变量
+>  使用这种方式进行连接时，需要安装完毕后配置 PATH 环境变量
 
 ### 4、数据模型
 
@@ -2854,7 +2854,7 @@ Explain 执行计划中各个字段的含义：
 | 字段             | 含义                                                         |
 | ---------------- | ------------------------------------------------------------ |
 | **id**           | select 查询的序列号，表示查询中执行 select 子句或者是操作表的顺序（id 相同，执行顺序从上到下；id 不同，值越大，越先执行） |
-| **select_type**  | 表示 SELECT 的类型，常见的取值有 SIMPLE（简单表，即不使用表连接或者子查询）、PRIMARY（主查询，即外层的查询）、UNION（UNION 中的第二个或者后面的查询语句）、SUBQUERY（SELECT/WHERE 之后包含了子查询）等 |
+| **select_type**  | 表示 SELECT 的类型，常见的取值有 SIMPLE（简单表，即不使用表连接或者子查询）、PRIMARY（主查询，即外层的查询）、UNION（UNION 中的第二个或者后面的查询语句）、SUBQUERY（SELECT / WHERE 之后包含了子查询）等 |
 | **type**         | 表示连接类型，性能由好到差的连接类型为 NULL、system、const、eq_ref、ref、range、index、all |
 | **possible_key** | 显示可能应用在这张表上的索引，一个或多个                     |
 | **key**          | 实际使用的索引，如果为 NULL，则没有使用索引                  |
@@ -2862,6 +2862,170 @@ Explain 执行计划中各个字段的含义：
 | **rows**         | MySQL 认为必须要执行查询的行数，在 innodb 引擎的表中，是一个估计值，可能并不总是准确的 |
 | **filtered**     | 表示返回结果的行数占需读取行数的百分比，filtered 的值越大越好 |
 
+```sql
+explain select * from student s where s.id in (select studentid from student_course sc where sc.courseid = (select id from course c where c.name = 'MySQL'));
+```
+
+![40](/images/mysql/40.png)
+
+### 8、索引使用规则
+
+#### （1）最左前缀法则
+
+如果索引了多列（联合索引），要遵守最左前缀法则。最左前缀法则指的是查询从索引的最左列开始，并且不跳过索引中的列
+
+如果跳跃某一列，**索引将会部分失效**（后面的字段索引失效）
+
+以 tb_user 表为例，我们先来查看一下之前 tb_user 表所创建的索引：
+
+![41](/images/mysql/41.png)
+
+在 tb_user 表中，有一个联合索引，这个联合索引涉及到三个字段，顺序分别为：profession，age，status
+
+对于最左前缀法则指的是，查询时，最左变的列，也就是 profession 必须存在，否则索引全部失效。而且中间不能跳过某一列，否则该列后面的字段索引将失效
+
+案例：
+
+```sql
+explain select * from tb_user where profession = '软件工程' and age = 31 and status = '0';
+explain select * from tb_user where profession = '软件工程' and age = 31;
+explain select * from tb_user where profession = '软件工程';
+```
+
+以上的这三组测试中，只要联合索引最左边的字段 profession 存在，索引就会生效，只不过索引的长度不同。由以上三组测试，我们也可以推测出 profession 字段索引长度为 47、age 字段索引长度为 2、status 字段索引长度为 5
+
+```sql
+explain select * from tb_user where age = 31 and status = '0';
+explain select * from tb_user where status = '0';
+```
+
+上面的这两组测试，索引并未生效，原因是因为不满足最左前缀法则，联合索引最左边的列 profession 不存在
+
+```sql
+explain select * from tb_user where profession = '软件工程' and status = '0';
+```
+
+上述的 SQL 查询时，存在 profession 字段，最左边的列是存在的，索引满足最左前缀法则的基本条件。但是查询时，跳过了 age 这个列，所以后面的列索引是不会使用的，也就是索引部分生效，所以索引的长度就是 47
+
+> 思考题：
+>
+> 当执行下列 SQL 语句时
+>
+> ```sql
+> explain select * from tb_user where age = 31 and status = '0' and profession = '软件工程';
+> ```
+>
+> 是否满足最左前缀法则，走不走上述的联合索引，索引长度？
+>
+> 答案：
+>
+> 完全满足最左前缀法则的，索引长度 54，联合索引是生效的
+>
+> 注意：
+>
+> 最左前缀法则中指的最左边的列，是指在查询时，联合索引的最左边的字段（即是第一个字段）必须存在，与我们编写 SQL 时，条件编写的先后顺序无关
+
+#### （2）范围查询
+
+联合索引中，出现范围查询（>，<），范围查询**右侧的列索引失效**
+
+```sql
+explain select * from tb_user where profession = '软件工程' and age > 30 and status = '0';
+```
+
+当范围查询使用 > 或 < 时，走联合索引了，但是索引的长度为 49，就说明范围查询右边的 status 字段是没有走索引的
+
+```sql
+explain select * from tb_user where profession = '软件工程' and age >= 30 and status = '0';
+```
+
+当范围查询使用 >= 或 <= 时，走联合索引了，但是索引的长度为 54，就说明所有的字段都是走索引的
+
+所以，在业务允许的情况下，尽可能的使用类似于 >= 或 <= 这类的范围查询，而避免使用 > 或 <
+
+#### （3）索引失效情况
+
+##### （1）索引列运算
+
+不要在索引列上进行运算操作，索引将失效
+
+如在 tb_user 表中，有一个 phone 字段的单列索引
+
+A. 当根据 phone 字段进行等值匹配查询时，索引生效
+
+```sql
+explain select * from tb_user where phone = '17799990015';
+```
+
+B. 当根据 phone 字段进行函数运算操作之后，索引失效
+
+```sql
+explain select * from tb_user where substring(phone,10,2) = '15';
+```
+
+##### （2）字符串不加引号
+
+字符串类型字段使用时，不加引号，索引将失效
+
+```sql
+explain select * from tb_user where phone = '17799990015';
+explain select * from tb_user where phone = 17799990015;
+```
+
+经过上面两组示例，我们会发现：如果字符串不加单引号，对于查询结果没什么影响，但是数据库存在隐式类型转换，索引将失效
+
+##### （3）模糊查询
+
+如果仅仅是尾部模糊匹配，索引不会失效。如果是头部模糊匹配，索引失效
+
+```sql
+explain select * from tb_user where profession like '软件%';
+explain select * from tb_user where profession like '%工程';
+explain select * from tb_user where profession like '%工%';
+```
+
+经过上述的测试，我们发现：在 like 模糊查询中，在关键字后面加 %，索引可以生效。而如果在关键字前面加了 %，索引将会失效
+
+##### （4）or 连接条件
+
+用 or 分割开的条件，如果 or 前的条件中的列有索引，而后面的列中没有索引，那么涉及的索引都不会被用到
+
+```sql
+explain select * from tb_user where id = 10 or age = 23;
+```
+
+由于 age 没有索引，所以即使 id 有索引，索引也会失效。所以需要针对于 age 也要建立索引：
+
+```sql
+create index idx_user_age on tb_user(age);
+```
+
+##### （5）数据分布影响
+
+如果 MySQL 评估使用索引比全表更慢，则不使用索引
+
+```sql
+select * from tb_user where phone >= '17799990005';          # 走索引
+select * from tb_user where phone >= '17799990015';          # 不走索引
+```
+
+MySQL 在查询时，会评估使用索引的效率与走全表扫描的效率，如果走全表扫描更快，则放弃使用索引，走全表扫描。因为索引是用来索引少量数据的，如果通过索引查询返回大批量的数据，则还不如走全表扫描来的快，此时索引就会失效
+
+#### （4）SQL 提示
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### （5）覆盖索引 & 回表
 
 
 
@@ -2877,6 +3041,7 @@ Explain 执行计划中各个字段的含义：
 
 
 
+#### （6）前缀索引
 
 
 
@@ -2886,11 +3051,13 @@ Explain 执行计划中各个字段的含义：
 
 
 
-### 8、索引使用
 
 
 
 
+
+
+#### （7）单列 & 联合索引
 
 
 
@@ -3056,7 +3223,9 @@ Explain 执行计划中各个字段的含义：
 
 ## 数据准备
 
-### 1、SQL 部分<a id="SQL部分"></a>
+### 1、SQL 部分
+
+<a id="SQL部分"></a>
 
 ```sql
 create table emp(
@@ -3104,7 +3273,9 @@ INSERT INTO emp (id, workno, name, gender, age, idcard, workaddress, entrydate)
 VALUES (16, '00016', '周芷若', '女', 18, null, '北京', '2012-06-01');
 ```
 
-### 2、外键约束部分<a id="外键约束部分"></a>
+### 2、外键约束部分
+
+<a id="外键约束部分"></a>
 
 ```sql
 create table dept(
@@ -3135,7 +3306,9 @@ VALUES
     (6, '小昭', 19, '程序员鼓励师',6600, '2004-10-12', 2,1);
 ```
 
-### 3、多表查询部分<a id="多表查询部分"></a>
+### 3、多表查询部分
+
+<a id="多表查询部分"></a>
 
 ```sql
 create table dept(
@@ -3178,7 +3351,9 @@ INSERT INTO emp (id, name, age, job,salary, entrydate, managerid, dept_id) VALUE
     (17, '陈友谅', 42, null,2000,'2011-10-12',1,null);
 ```
 
-### 4、索引语法部分<a id="索引语法部分"></a>
+### 4、索引语法部分
+
+<a id="索引语法部分"></a>
 
 ```sql
 create table tb_user(
