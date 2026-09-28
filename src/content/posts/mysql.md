@@ -3193,99 +3193,550 @@ select count(distinct substring(email,1,4)) / count(*) from tb_user ;
 
 ### 1、插入数据优化
 
+#### （1）insert
 
+如果我们需要一次性往数据库表中插入多条记录，可以从以下三个方面进行优化
 
+```sql
+insert into tb_test values(1,'tom');
+insert into tb_test values(2,'cat');
+insert into tb_test values(3,'jerry');
+......
+```
 
+##### 1）优化方案一 
 
+批量插入数据
 
+```sql
+Insert into tb_test values(1,'Tom'),(2,'Cat'),(3,'Jerry');
+```
 
+一次性插入的数据不建议超过 1000 条
 
+##### 2）优化方案二 
+
+手动控制事务
+
+```sql
+start transaction;
+insert into tb_test values(1,'Tom'),(2,'Cat'),(3,'Jerry');
+insert into tb_test values(4,'Tom'),(5,'Cat'),(6,'Jerry');
+insert into tb_test values(7,'Tom'),(8,'Cat'),(9,'Jerry');
+commit;
+```
+
+##### 3）优化方案三
+
+主键顺序插入，性能要高于乱序插入
+
+```
+主键乱序插入 : 8 1 9 21 88 2 4 15 89 5 7 3
+主键顺序插入 : 1 2 3 4 5 7 8 9 15 21 88 89
+```
+
+#### （2）大批量插入数据
+
+如果一次性需要插入大批量数据（比如：几百万的记录），使用 insert 语句插入性能较低，此时可以使用 MySQL 数据库提供的 load 指令进行插入
+
+可以执行如下指令，将数据脚本文件中的数据加载到表结构中：
+
+```sql
+-- 客户端连接服务端时，加上参数 --local-infile
+mysql --local-infile -u root -p
+
+-- 设置全局参数 local_infile 为 1，开启从本地加载文件导入数据的开关
+set global local_infile = 1;
+
+-- 执行 load 指令将准备好的数据，加载到表结构中
+load data local infile '/root/sql1.log' into table tb_user fields
+terminated by ',' lines terminated by '\n' ;
+```
+
+插入 100w 的记录，17s 就完成了，性能很好
+
+在 load 时，主键顺序插入性能高于乱序插入
 
 ### 2、主键优化
 
+#### （1）数据组织方式 
 
+在 InnoDB 存储引擎中，表数据都是根据主键顺序组织存放的，这种存储方式的表称为**索引组织表（index organized table IOT）**
 
+![33](/images/mysql/33.png)
 
+行数据，都是存储在聚集索引的叶子节点上的
 
+![22](/images/mysql/22.png)
 
+在 InnoDB 引擎中，数据行是记录在逻辑结构 page 页中的，而每一个页的大小是固定的，默认16K。那也就意味着， 一个页中所存储的行也是有限的，如果插入的数据行 row 在该页存储不小，将会存储到下一个页中，页与页之间会通过指针连接
 
+#### （2）页分裂 
 
+页可以为空，也可以填充一半，也可以填充 100%。每个页包含了 2-N 行数据（如果一行数据过大，会行溢出），根据主键排列
 
+A．主键顺序插入效果 
 
+①．从磁盘中申请页，主键顺序插入 
+
+②．第一个页没有满，继续往第一页插入 
+
+③．当第一个也写满之后，再写入第二个页，页与页之间会通过指针连接 
+
+④．当第二页写满了，再往第三页写入
+
+B．主键乱序插入效果 
+
+①．加入 1#，2# 页都已经写满了，存放了如图所示的数据 
+
+![48](/images/mysql/48.png)
+
+②．此时再插入 id 为 50 的记录，按照顺序，应该存储在 47 之后。但是 47 所在的 1# 页，已经写满了。 那么此时会开辟一个新的页 3#，将 1# 页后一半的数据，移动到 3# 页，然后在 3# 页，插入50。 移动数据，并插入 id 为 50 的数据之后，重新设置链表指针
+
+![49](/images/mysql/49.png)
+
+上述的这种现象，称之为“页分裂”，是比较耗费性能的操作
+
+#### （3）页合并 
+
+当删除一行记录时，实际上记录并没有被物理删除，只是记录被标记（flaged）为删除并且它的空间变得允许被其他记录声明使用
+
+当我们继续删除数据记录，当页中删除的记录达到 MERGE_THRESHOLD（默认为页的 50%），InnoDB 会开始寻找最靠近的页（前或后）看看是否可以将两个页合并以优化空间使用
+
+> MERGE_THRESHOLD：合并页的阈值，可以自己设置，在创建表或者创建索引时指定
+
+#### （4）索引设计原则
+
+- 满足业务需求的情况下，尽量降低主键的长度
+- 插入数据时，尽量选择顺序插入，选择使用 AUTO_INCREMENT 自增主键
+- 尽量不要使用 UUID 做主键或者是其他自然主键，如身份证号
+- 业务操作时，避免对主键的修改
 
 ### 3、order by 优化
 
+MySQL 的排序，有两种方式： 
 
+- Using filesort：通过表的索引或全表扫描，读取满足条件的数据行，然后在排序缓冲区 sort buffer 中完成排序操作，所有不是通过索引直接返回排序结果的排序都叫 FileSort 排序
+- Using index：通过有序索引顺序扫描直接返回有序数据，这种情况即为 using index，不需要额外排序，操作效率高
 
+对于以上的两种排序方式，`Using index` 的性能高，而 `Using filesort` 的性能低，我们在优化排序操作时，尽量要优化为 `Using index`
 
+接下来，我们来做一个测试：
 
+A．执行排序 SQL
 
+```sql
+explain select id,age,phone from tb_user order by age ;
+explain select id,age,phone from tb_user order by age, phone ;
+```
 
+由于 age，phone 都没有索引，所以排序时，出现 Using filesort，排序性能较低
 
+B．创建索引
 
+```sql
+-- 创建索引
+create index idx_user_age_phone_aa on tb_user(age,phone);
+```
 
+C．创建索引后，根据 age，phone 进行升序排序
+
+```sql
+explain select id,age,phone from tb_user order by age;
+explain select id,age,phone from tb_user order by age , phone;
+```
+
+建立索引之后，再次进行排序查询，就由原来的 Using filesort， 变为了 Using index，性能就是比较高的了
+
+D．创建索引后，根据 age，phone 进行降序排序
+
+```sql
+explain select id,age,phone from tb_user order by age desc , phone desc ;
+```
+
+也出现 Using index， 但是此时 Extra 中出现了 Backward index scan，代表反向扫描索引，因为在 MySQL 中我们创建的索引，默认索引的叶子节点是从小到大排序的，而此时我们查询排序时，是从大到小，所以在扫描时，就是反向扫描，就会出现 Backward index scan
+
+在 MySQL8 版本中，支持降序索引，我们也可以创建降序索引
+
+E．根据 phone，age 进行升序排序，phone 在前，age 在后
+
+```sql
+explain select id,age,phone from tb_user order by phone , age;
+```
+
+排序时，也需要满足最左前缀法则，否则也会出现 filesort。因为在创建索引的时候，age 是第一个字段，phone 是第二个字段，所以排序时，也就该按照这个顺序来，否则就会出现 Using filesort
+
+F．根据 age，phone 进行一个升序，一个降序
+
+```sql
+explain select id,age,phone from tb_user order by age asc , phone desc ;
+```
+
+因为创建索引时，如果未指定顺序，默认都是按照升序排序的，而查询时，一个升序一个降序，此时就会出现 Using filesort
+
+为了解决上述的问题，我们可以创建一个索引，这个联合索引中 age 升序排序，phone 倒序排序
+
+G．创建联合索引（age 升序排序，phone 倒序排序）
+
+```sql
+create index idx_user_age_phone_ad on tb_user(age asc ,phone desc);
+```
+
+由上述的测试，我们得出 order by 优化原则： 
+
+- 根据排序字段建立合适的索引，多字段排序时，也遵循最左前缀法则
+
+- 尽量使用覆盖索引
+
+- 多字段排序， 一个升序一个降序，此时需要注意联合索引在创建时的规则（ASC / DESC）
+
+- 如果不可避免的出现 filesort，大数据量排序时，可以适当增大排序缓冲区大小 sort_buffer_size （默认 256k）
+
+  ```sql
+  show variables like 'sort_buffer_size';
+  ```
 
 ### 4、group by 优化
 
+分组操作，我们主要来看看索引对于分组操作的影响
 
+在没有索引的情况下，执行如下 SQL，查询执行计划：
 
+```sql
+explain select profession , count(*) from tb_user group by profession ;
+```
 
+然后，我们在针对于 profession ， age， status 创建一个联合索引
 
+```sql
+create index idx_user_pro_age_sta on tb_user(profession , age , status);
+```
 
+紧接着，再执行前面相同的 SQL 查看执行计划
 
+```sql
+explain select profession , count(*) from tb_user group by profession ;
+```
 
+再执行如下的分组查询 SQL，查看执行计划：
 
+```sql
+explain select profession , count(*) from tb_user group by profession , age;
+explain select age , count(*) from tb_user group by age;
+```
 
+我们发现，如果仅仅根据 age 分组，就会出现 Using temporary；而如果是根据 profession，age 两个字段同时分组，则不会出现 Using temporary。原因是因为对于分组操作，在联合索引中，也是符合最左前缀法则的
+
+所以，在分组操作中，我们需要通过以下两点进行优化，以提升性能： 
+
+- A．在分组操作时，可以通过索引来提高效率
+- B．分组操作时，索引的使用也是满足最左前缀法则的
 
 ### 5、limit 优化
 
+在数据量比较大时，如果进行 limit 分页查询，在查询时，越往后，分页查询效率越低
 
+我们一起来看看执行 limit 分页查询耗时对比：
 
+```sql
+select * from tb_sku limit 0,10;
+select * from tb_sku limit 100000,10;
+select * from tb_sku limit 500000,10;
+select * from tb_sku limit 900000,10;
+```
 
+通过测试我们会看到，越往后，分页查询效率越低，这就是分页查询的问题所在
 
+因为，当在进行分页查询时，如果执行 `limit 2000000,10`，此时需要 MySQL 排序前 2000010 记录，仅仅返回 2000000 ~ 2000010 的记录，其他记录丢弃，查询排序的代价非常大
 
+优化思路：
 
+一般分页查询时，通过创建覆盖索引能够比较好地提高性能，可以通过覆盖索引加子查询形式进行优化
 
-
-
+```sql
+explain select * from tb_sku t , (select id from tb_sku order by id limit 2000000,10) a where t.id = a.id;
+```
 
 ### 6、count 优化
 
+#### （1）概述
 
+```sql
+select count(*) from tb_user ;
+```
 
+如果数据量很大，在执行 count 操作时，是非常耗时的
 
+- MyISAM 引擎把一个表的总行数存在了磁盘上，因此执行 count(*) 的时候会直接返回这个数，效率很高； 但是如果是带条件的 count，MyISAM 也慢
+- InnoDB 引擎就麻烦了，它执行 count(*) 的时候，需要把数据一行一行地从引擎里面读出来，然后累积计数
 
+如果说要大幅度提升 InnoDB 表的 count 效率，主要的优化思路：
 
+自己计数（可以借助于 redis 这样的数据库进行，但是如果是带条件的 count 又比较麻烦了）
 
+#### （2）count 用法
 
+count() 是一个聚合函数，对于返回的结果集，一行行地判断，如果 count 函数的参数不是 NULL，累计值就加 1，否则不加，最后返回累计值
 
+用法：
 
+- count(*)
+- count(主键)
+- count(字段)
+- count(数字)
 
+| count 用法  | 含义                                                         |
+| ----------- | ------------------------------------------------------------ |
+| count(主键) | InnoDB 引擎会遍历整张表，把每一行的主键 id 值都取出来，返回给服务层。服务层拿到主键后，直接按行进行累加（主键不可能为 null） |
+| count(字段) | 没有 not null 约束：InnoDB 引擎会遍历整张表把每一行的字段值都取出来，返回给服务层，服务层判断是否为 null，不为 null，计数累加。 有 not null 约束：InnoDB 引擎遍历整张表把每一行的字段值都取出来，返回给服务层，直接按行进行累加 |
+| count(数字) | InnoDB 引擎遍历整张表，但不取值。服务层对于返回的每一行，放一个数字进去，直接按行进行累加 |
+| count(*)    | InnoDB 引擎并不会把全部字段取出来，而是专门做了优化，不取值，服务层直接按行进行累加 |
 
+按照效率排序的话，count(字段) < count(主键 id) < count(数字) ≈ count( * )，所以尽量使用 count( * )
 
 ### 7、update 优化
 
+我们主要需要注意一下 update 语句执行时的注意事项
 
+```sql
+update course set name = 'javaEE' where id = 1 ;
+```
 
+当我们在执行这条 SQL 语句时，会锁定 id 为 1 这一行的数据，然后事务提交之后，行锁释放
 
+但是当我们在执行如下 SQL 时
 
+```sql
+update course set name = 'SpringBoot' where name = 'PHP' ;
+```
 
+当我们开启多个事务，在执行上述的 SQL 时，我们发现行锁升级为了表锁，会锁定所有的数据，导致该 update 语句的性能大大降低
+
+我们可以对 name 字段加索引，再执行上述 SQL 就不会出现表锁
+
+> InnoDB 的行锁是针对**索引**加的锁，不是针对记录加的锁，并且该索引不能失效，否则会从行锁升级为表锁
 
 ## 十、MySQL 进阶之 —— 视图
 
+### 1、视图介绍
 
+视图（View）是一种虚拟存在的表。视图中的数据并不在数据库中实际存在，行和列数据来自定义视图的查询中使用的表（基表），并且是在使用视图时动态生成的
 
+通俗的讲，视图只保存了查询的 SQL 逻辑，不保存查询结果。所以我们在创建视图的时候，主要的工作就落在创建这条 SQL 查询语句上
 
+### 2、基础语法
 
+#### （1）创建
 
+```sql
+CREATE [OR REPLACE] VIEW 视图名称[(列名列表)] AS SELECT语句 [ WITH [ CASCADED | LOCAL ] CHECK OPTION ]
+```
+
+#### （2）查询
+
+```sql
+-- 查看创建视图语句
+SHOW CREATE VIEW 视图名称;
+-- 查看视图数据
+SELECT * FROM 视图名称 ...... ;
+```
+
+#### （3）修改
+
+```sql
+-- 方式一
+CREATE [OR REPLACE] VIEW 视图名称[(列名列表)] AS SELECT语句 [ WITH [ CASCADED | LOCAL ] CHECK OPTION ]
+-- 方式二
+ALTER VIEW 视图名称[(列名列表)] AS SELECT语句 [ WITH [ CASCADED | LOCAL ] CHECK OPTION ]
+```
+
+#### （4）删除
+
+```sql
+DROP VIEW [IF EXISTS] 视图名称 [,视图名称 ...]
+```
+
+#### （5）演示示例
+
+```sql
+-- 创建视图
+create or replace view stu_v_1 as select id,name from student where id <= 10;
+
+-- 查询视图
+show create view stu_v_1;
+select * from stu_v_1;
+select * from stu_v_1 where id < 3;
+
+-- 修改视图
+create or replace view stu_v_1 as select id,name,no from student where id <= 10;
+alter view stu_v_1 as select id,name from student where id <= 10;
+
+-- 删除视图
+drop view if exists stu_v_1;
+```
+
+#### （6）增删改
+
+```sql
+create or replace view stu_v_1 as select id,name from student where id <= 10 ;
+select * from stu_v_1;
+insert into stu_v_1 values(6,'Tom');
+insert into stu_v_1 values(17,'Tom22');
+```
+
+执行上述的 SQL，我们会发现，id 为 6 和 17 的数据都是可以成功插入的。 但是我们执行查询，查询出来的数据，却没有 id 为 17 的记录
+
+因为我们在创建视图的时候，指定的条件为 `id<=10`，id 为 17 的数据不符合条件，所以没有查询出来，但是这条数据确实是已经成功的插入到了基表中
+
+如果我们定义视图时，如果指定了条件，然后我们在插入、修改、删除数据时，是否可以做到必须满足条件才能操作，否则不能够操作呢？ 答案是可以的，这就需要借助于视图的**检查选项**了
+
+### 3、检查选项
+
+#### （1）CASCADED 级联
+
+当使用 `WITH CHECK OPTION` 子句创建视图时，MySQL 会通过视图检查正在更改的每个行，例如插入，更新，删除，以使其符合视图的定义。MySQL 允许基于另一个视图创建视图，它还会检查依赖视图中的规则以保持一致性
+
+为了确定检查的范围，mysql 提供了两个选项：`CASCADED` 和 `LOCAL`，默认值为 `CASCADED`
+
+比如，v2 视图是基于 v1 视图的，如果在 v2 视图创建的时候指定了检查选项为 cascaded，但是 v1 视图创建时未指定检查选项。则在执行检查时，不仅会检查v2，还会级联检查 v2 的关联视图 v1
+
+```sql
+create view v1 as select id,name from student where id <= 20;
+create view v2 as select id,name from v1 where id >= 10 with cascaded check option;
+create view v3 as select id,name from v2 where id <= 15;
+```
+
+![50](/images/mysql/50.png)
+
+#### （2）LOCAL 本地
+
+比如，v2 视图是基于 v1 视图的，如果在 v2 视图创建的时候指定了检查选项为 local ，但是 v1 视图创建时未指定检查选项。 则在执行检查时，只会检查 v2，不会检查v2的关联视图 v1；v3 视图是基于 v2 视图的，但是 v3 视图创建时未指定检查选项。则在执行检查时，只会检查 v2，不会 v3 和检查 v2 的关联视图 v1
+
+```sql
+create view v1 as select id,name from student where id <= 15;
+create view v2 as select id,name from v1 where id >= 10 with local check option;
+create view v3 as select id,name from v2 where id < 20;
+```
+
+### 4、视图更新
+
+要使视图可更新，视图中的行与基础表中的行之间必须存在一对一的关系。如果视图包含以下任何一项，则该视图不可更新： 
+
+- 聚合函数或窗口函数（SUM()、 MIN()、 MAX()、 COUNT()等） 
+- DISTINCT 
+- GROUP BY 
+- HAVING 
+- UNION 或者 UNION ALL
+
+示例：
+
+```sql
+create view stu_v_count as select count(*) from student;
+insert into stu_v_count values(10);
+# 报错
+```
+
+### 5、视图作用
+
+#### （1）简单 
+
+视图不仅可以简化用户对数据的理解，也可以简化他们的操作。那些被经常使用的查询可以被定义为视图，从而使得用户不必为以后的操作每次指定全部的条件
+
+#### （2）安全 
+
+数据库可以授权，但不能授权到数据库特定行和特定的列上。通过视图用户只能查询和修改他们所能见到的数据
+
+#### （3）数据独立 
+
+视图可帮助用户屏蔽真实表结构变化带来的影响
+
+### 6、视图案例
+
+A. 为了保证数据库表的安全性，开发人员在操作 tb_user 表时，只能看到的用户的基本字段，屏蔽手机号和邮箱两个字段
+
+```sql
+create view tb_user_view as select id,name,profession,age,gender,status,createtime from tb_user;
+select * from tb_user_view;
+```
+
+B. 查询每个学生所选修的课程（三张表联查），这个功能在很多的业务中都有使用到，为了简化操作，定义一个视图
+
+```sql
+create view tb_stu_course_view as select s.name student_name , s.no student_no , c.name course_name from student s, student_course sc , course c where s.id = sc.studentid and sc.courseid = c.id;
+select * from tb_stu_course_view;
+```
 
 ## 十一、MySQL 进阶之 —— 存储过程
+
+### 1、介绍
+
+
+
+
+
+### 2、基础语法
+
+
+
+
+
+### 3、变量
+
+
+
+
+
+### 4、if 判断
+
+
+
+
+
+### 5、参数
+
+
+
+
+
+### 6、case3
+
+
+
+
+
+### 7、循环
+
+
+
+
+
+### 8、游标
+
+
+
+
+
+### 9、条件处理程序
+
+
+
+
+
+### 10、存储函数
 
 
 
 
 
 ## 十二、MySQL 进阶之 —— 触发器
+
+1、介绍
+
+
+
+
+
+2、案例
 
 
 
