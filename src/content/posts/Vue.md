@@ -802,27 +802,17 @@ function changeCarPrice() {
     <button @click="changeName">修改名字</button>
     <button @click="changeAge">修改年龄</button>
     <button @click="changePerson">修改整个人</button>
-    <hr>
-    <h2>测试：{{obj.a.b.c}}</h2>
-    <button @click="test">修改obj.a.b.c</button>
   </div>
 </template>
 
 <script lang="ts" setup name="Person">
   import {reactive,watch} from 'vue'
-  // 数据
+
   let person = reactive({
     name:'张三',
     age:18
   })
-  let obj = reactive({
-    a:{
-      b:{
-        c:666
-      }
-    }
-  })
-  // 方法
+
   function changeName(){
     person.name += '~'
   }
@@ -832,28 +822,28 @@ function changeCarPrice() {
   function changePerson(){
     Object.assign(person,{name:'李四',age:80})
   }
-  function test(){
-    obj.a.b.c = 888
-  }
 
   // 监视，情况三：监视【reactive】定义的【对象类型】数据，且默认是开启深度监视的
   watch(person,(newValue,oldValue)=>{
-    console.log('person变化了',newValue,oldValue)
-  })
-  watch(obj,(newValue,oldValue)=>{
-    console.log('Obj变化了',newValue,oldValue)
+    console.log('person 变化了',newValue,oldValue)
   })
 </script>
 ```
 
-#### * 情况四
+#### （4）情况四
 
-监视`ref`或`reactive`定义的【对象类型】数据中的**某个属性**，注意点如下：
+监视 `ref` 或 `reactive` 定义的`对象类型`数据中的**某个属性**，注意点如下：
 
-1. 若该属性值**不是**【对象类型】，需要写成函数形式。
-2. 若该属性值是**依然**是【对象类型】，可直接编，也可写成函数，建议写成函数。
+1. 若该属性值**不是**`对象类型`，需要写成函数形式
+2. 若该属性值是**依然**是`对象类型`，可直接编，也可写成函数，建议写成函数
 
-结论：监视的要是对象里的属性，那么最好写函数式，注意点：若是对象监视的是地址值，需要关注对象内部，需要手动开启深度监视。
+结论：
+
+监视的要是对象里的属性，那么最好写函数式
+
+注意点：
+
+若是对象监视的是地址值，需要关注对象内部，需要手动开启深度监视
 
 ```vue
 <template>
@@ -873,7 +863,6 @@ function changeCarPrice() {
 <script lang="ts" setup name="Person">
   import {reactive,watch} from 'vue'
 
-  // 数据
   let person = reactive({
     name:'张三',
     age:18,
@@ -882,7 +871,7 @@ function changeCarPrice() {
       c2:'宝马'
     }
   })
-  // 方法
+
   function changeName(){
     person.name += '~'
   }
@@ -901,17 +890,17 @@ function changeCarPrice() {
 
   // 监视，情况四：监视响应式对象中的某个属性，且该属性是基本类型的，要写成函数式
   /* watch(()=> person.name,(newValue,oldValue)=>{
-    console.log('person.name变化了',newValue,oldValue)
+    console.log('person.name 变化了',newValue,oldValue)
   }) */
 
   // 监视，情况四：监视响应式对象中的某个属性，且该属性是对象类型的，可以直接写，也能写函数，更推荐写函数
   watch(()=>person.car,(newValue,oldValue)=>{
-    console.log('person.car变化了',newValue,oldValue)
+    console.log('person.car 变化了',newValue,oldValue)
   },{deep:true})
 </script>
 ```
 
-#### * 情况五
+#### （5）情况五
 
 监视上述的多个数据
 
@@ -933,7 +922,6 @@ function changeCarPrice() {
 <script lang="ts" setup name="Person">
   import {reactive,watch} from 'vue'
 
-  // 数据
   let person = reactive({
     name:'张三',
     age:18,
@@ -942,7 +930,7 @@ function changeCarPrice() {
       c2:'宝马'
     }
   })
-  // 方法
+
   function changeName(){
     person.name += '~'
   }
@@ -967,82 +955,79 @@ function changeCarPrice() {
 </script>
 ```
 
-#### 3.10. 【watchEffect】
+### 10、watchEffect
 
-* 官网：立即运行一个函数，同时响应式地追踪其依赖，并在依赖更改时重新执行该函数。
+官网：立即运行一个函数，同时响应式地追踪其依赖，并在依赖更改时重新执行该函数
 
-* `watch`对比`watchEffect`
+`watch` 对比 `watchEffect`：
 
-  > 1. 都能监听响应式数据的变化，不同的是监听数据变化的方式不同
-  >
-  > 2. `watch`：要明确指出监视的数据
-  >
-  > 3. `watchEffect`：不用明确指出监视的数据（函数中用到哪些属性，那就监视哪些属性）。
+- 都能监听响应式数据的变化，不同的是监听数据变化的方式不同
 
-* 示例代码：
+- `watch`：要明确指出监视的数据
 
-  ```vue
-  <template>
-    <div class="person">
-      <h1>需求：水温达到50℃，或水位达到20cm，则联系服务器</h1>
-      <h2 id="demo">水温：{{temp}}</h2>
-      <h2>水位：{{height}}</h2>
-      <button @click="changePrice">水温+1</button>
-      <button @click="changeSum">水位+10</button>
-    </div>
-  </template>
-  
-  <script lang="ts" setup name="Person">
-    import {ref,watch,watchEffect} from 'vue'
-    // 数据
-    let temp = ref(0)
-    let height = ref(0)
-  
-    // 方法
-    function changePrice(){
-      temp.value += 10
+- `watchEffect`：不用明确指出监视的数据（函数中用到哪些属性，那就监视哪些属性）
+
+示例代码：
+
+```vue
+<template>
+  <div class="person">
+    <h1>需求：水温达到 50℃，或水位达到 20cm，则联系服务器</h1>
+    <h2 id="demo">水温：{{temp}}</h2>
+    <h2>水位：{{height}}</h2>
+    <button @click="changePrice">水温+1</button>
+    <button @click="changeSum">水位+10</button>
+  </div>
+</template>
+
+<script lang="ts" setup name="Person">
+  import {ref,watch,watchEffect} from 'vue'
+
+  let temp = ref(0)
+  let height = ref(0)
+
+  function changePrice(){
+    temp.value += 10
+  }
+  function changeSum(){
+    height.value += 1
+  }
+
+  // 用 watch 实现，需要明确的指出要监视：temp、height
+  watch([temp,height],(value)=>{
+    // 从 value 中获取最新的 temp 值、height 值
+    const [newTemp,newHeight] = value
+    // 室温达到 50℃，或水位达到 20cm，立刻联系服务器
+    if(newTemp >= 50 || newHeight >= 20){
+      console.log('联系服务器')
     }
-    function changeSum(){
-      height.value += 1
+  })
+
+  // 用 watchEffect 实现，不用
+  const stopWtach = watchEffect(()=>{
+    // 室温达到 50℃，或水位达到 20cm，立刻联系服务器
+    if(temp.value >= 50 || height.value >= 20){
+      console.log(document.getElementById('demo')?.innerText)
+      console.log('联系服务器')
     }
-  
-    // 用watch实现，需要明确的指出要监视：temp、height
-    watch([temp,height],(value)=>{
-      // 从value中获取最新的temp值、height值
-      const [newTemp,newHeight] = value
-      // 室温达到50℃，或水位达到20cm，立刻联系服务器
-      if(newTemp >= 50 || newHeight >= 20){
-        console.log('联系服务器')
-      }
-    })
-  
-    // 用watchEffect实现，不用
-    const stopWtach = watchEffect(()=>{
-      // 室温达到50℃，或水位达到20cm，立刻联系服务器
-      if(temp.value >= 50 || height.value >= 20){
-        console.log(document.getElementById('demo')?.innerText)
-        console.log('联系服务器')
-      }
-      // 水温达到100，或水位达到50，取消监视
-      if(temp.value === 100 || height.value === 50){
-        console.log('清理了')
-        stopWtach()
-      }
-    })
-  </script>
-  ```
+    // 水温达到 100，或水位达到 50，取消监视
+    if(temp.value === 100 || height.value === 50){
+      console.log('清理了')
+      stopWtach()
+    }
+  })
+</script>
+```
 
-  
+### 11、标签的 ref 属性
 
-#### 3.11. 【标签的 ref 属性】
+作用：用于注册模板引用
 
-作用：用于注册模板引用。
+* 用在普通 `DOM` 标签上，获取的是 `DOM` 节点
 
-> * 用在普通`DOM`标签上，获取的是`DOM`节点。
->
-> * 用在组件标签上，获取的是组件实例对象。
+* 用在组件标签上，获取的是组件实例对象
 
-用在普通`DOM`标签上：
+用在普通 `DOM` 标签上：
 
 ```vue
 <template>
@@ -1063,16 +1048,14 @@ function changeCarPrice() {
   let title3 = ref()
 
   function showLog(){
-    // 通过id获取元素
+    // 通过 id 获取元素
     const t1 = document.getElementById('title1')
     // 打印内容
     console.log((t1 as HTMLElement).innerText)
     console.log((<HTMLElement>t1).innerText)
     console.log(t1?.innerText)
-    
-		/************************************/
 		
-    // 通过ref获取元素
+    // 通过 ref 获取元素
     console.log(title1.value)
     console.log(title2.value)
     console.log(title3.value)
