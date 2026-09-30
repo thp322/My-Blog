@@ -1027,46 +1027,37 @@ function changeCarPrice() {
 
 * 用在组件标签上，获取的是组件实例对象
 
+* 如果通过 `id` 获取元素，多个 vue 文件的 id 值可能会冲突，`style` 中的样式也类似，所以我们需要加 `scoped`，添加局部样式，以防与其他页面冲突
+
 用在普通 `DOM` 标签上：
 
 ```vue
 <template>
   <div class="person">
-    <h1 ref="title1">尚硅谷</h1>
-    <h2 ref="title2">前端</h2>
-    <h3 ref="title3">Vue</h3>
-    <input type="text" ref="inpt"> <br><br>
-    <button @click="showLog">点我打印内容</button>
+    <h1>中国</h1>
+    <h2 ref="title">深圳</h2>
+    <h3>Harper</h3>
+    <button @click="showLog">点我输出h2这个元素</button>
   </div>
 </template>
 
 <script lang="ts" setup name="Person">
   import {ref} from 'vue'
 	
-  let title1 = ref()
-  let title2 = ref()
-  let title3 = ref()
+  // 创建一个 title2，用于存储 ref 标记的内容
+  let title = ref()
 
   function showLog(){
-    // 通过 id 获取元素
-    const t1 = document.getElementById('title1')
-    // 打印内容
-    console.log((t1 as HTMLElement).innerText)
-    console.log((<HTMLElement>t1).innerText)
-    console.log(t1?.innerText)
-		
-    // 通过 ref 获取元素
-    console.log(title1.value)
-    console.log(title2.value)
-    console.log(title3.value)
+    console.log(title.value)
   }
+  defineExpose({a,b,c})
 </script>
 ```
 
 用在组件标签上：
 
 ```vue
-<!-- 父组件App.vue -->
+<!-- 父组件 App.vue -->
 <template>
   <Person ref="ren"/>
   <button @click="test">测试</button>
@@ -1085,167 +1076,169 @@ function changeCarPrice() {
 </script>
 
 
-<!-- 子组件Person.vue中要使用defineExpose暴露内容 -->
+
+<!-- 子组件 Person.vue 中要使用 defineExpose 暴露内容 -->
 <script lang="ts" setup name="Person">
   import {ref,defineExpose} from 'vue'
-	// 数据
+
   let name = ref('张三')
   let age = ref(18)
-  /****************************/
-  /****************************/
-  // 使用defineExpose将组件中的数据交给外部
+
+  // 使用 defineExpose 将组件中的数据交给外部
   defineExpose({name,age})
 </script>
 ```
 
-
-
-#### 3.12. 【props】
-
-> ```js
-> // 定义一个接口，限制每个Person对象的格式
-> export interface PersonInter {
-> id:string,
-> name:string,
->  age:number
-> }
-> 
-> // 定义一个自定义类型Persons
-> export type Persons = Array<PersonInter>
-> ```
+> 在 Person.vue 文件（子）中的数据，在 app.vue 中不能直接拿到，这是 vue3 的数据保护措施，如果想要拿到详细的数据，需要用 `defineExpose` 将组件中的数据交给外部
 >
-> `App.vue`中代码：
->
-> ```vue
-> <template>
-> 	<Person :list="persons"/>
-> </template>
-> 
-> <script lang="ts" setup name="App">
-> import Person from './components/Person.vue'
-> import {reactive} from 'vue'
->  import {type Persons} from './types'
-> 
->  let persons = reactive<Persons>([
->   {id:'e98219e12',name:'张三',age:18},
->    {id:'e98219e13',name:'李四',age:19},
->     {id:'e98219e14',name:'王五',age:20}
->   ])
-> </script>
-> 
-> ```
->
-> `Person.vue`中代码：
->
-> ```Vue
-> <template>
-> <div class="person">
-> <ul>
->   <li v-for="item in list" :key="item.id">
->      {{item.name}}--{{item.age}}
->    </li>
->  </ul>
-> </div>
-> </template>
-> 
-> <script lang="ts" setup name="Person">
-> import {defineProps} from 'vue'
-> import {type PersonInter} from '@/types'
-> 
-> // 第一种写法：仅接收
-> // const props = defineProps(['list'])
-> 
-> // 第二种写法：接收+限制类型
-> // defineProps<{list:Persons}>()
-> 
-> // 第三种写法：接收+限制类型+指定默认值+限制必要性
-> let props = withDefaults(defineProps<{list?:Persons}>(),{
->   list:()=>[{id:'asdasg01',name:'小猪佩奇',age:18}]
-> })
-> console.log(props)
-> </script>
-> ```
+> ![4](/images/Vue/4.png)
 
-#### 3.13. 【生命周期】
+### 12、props
 
-* 概念：`Vue`组件实例在创建时要经历一系列的初始化步骤，在此过程中`Vue`会在合适的时机，调用特定的函数，从而让开发者有机会在特定阶段运行自己的代码，这些特定的函数统称为：生命周期钩子
+```js
+// index.ts
+// 定义一个接口，限制每个 Person 对象的格式
+export interface PersonInter {
+    id: string,
+    name: string,
+    age: number
+}
 
-* 规律：
+// 定义一个自定义类型 Persons
+export type Persons = Array<PersonInter>
+```
 
-  > 生命周期整体分为四个阶段，分别是：**创建、挂载、更新、销毁**，每个阶段都有两个钩子，一前一后。
+`App.vue` 中代码：
 
-* `Vue2`的生命周期
+```html
+<template>
+	<Person :list="persons"/>
+</template>
 
-  > 创建阶段：`beforeCreate`、`created`
-  >
-  > 挂载阶段：`beforeMount`、`mounted`
-  >
-  > 更新阶段：`beforeUpdate`、`updated`
-  >
-  > 销毁阶段：`beforeDestroy`、`destroyed`
+<script lang="ts" setup name="App">
+    import Person from './components/Person.vue'
+    import {reactive} from 'vue'
+    import {type Persons} from './types'
 
-* `Vue3`的生命周期
+    let persons = reactive<Persons>([
+        {id:'e98219e12',name:'张三',age:18},
+        {id:'e98219e13',name:'李四',age:19},
+        {id:'e98219e14',name:'王五',age:20}
+    ])
+</script>
+```
 
-  > 创建阶段：`setup`
-  >
-  > 挂载阶段：`onBeforeMount`、`onMounted`
-  >
-  > 更新阶段：`onBeforeUpdate`、`onUpdated`
-  >
-  > 卸载阶段：`onBeforeUnmount`、`onUnmounted`
+`Person.vue` 中代码：
 
-* 常用的钩子：`onMounted`(挂载完毕)、`onUpdated`(更新完毕)、`onBeforeUnmount`(卸载之前)
+```html
+<template>
+<div class="person">
+<ul>
+    <li v-for="item in list" :key="item.id">
+      	{{item.name}}--{{item.age}}
+    </li>
+</ul>	
+</div>
+</template>
 
-* 示例代码：
+<script lang="ts" setup name="Person">
+import {defineProps} from 'vue'
+import {type PersonInter} from '@/types'
 
-  ```vue
-  <template>
-    <div class="person">
-      <h2>当前求和为：{{ sum }}</h2>
-      <button @click="changeSum">点我sum+1</button>
-    </div>
-  </template>
-  
-  <!-- vue3写法 -->
-  <script lang="ts" setup name="Person">
-    import { 
-      ref, 
-      onBeforeMount, 
-      onMounted, 
-      onBeforeUpdate, 
-      onUpdated, 
-      onBeforeUnmount, 
-      onUnmounted 
-    } from 'vue'
-  
-    // 数据
-    let sum = ref(0)
-    // 方法
-    function changeSum() {
-      sum.value += 1
-    }
-    console.log('setup')
-    // 生命周期钩子
-    onBeforeMount(()=>{
-      console.log('挂载之前')
-    })
-    onMounted(()=>{
-      console.log('挂载完毕')
-    })
-    onBeforeUpdate(()=>{
-      console.log('更新之前')
-    })
-    onUpdated(()=>{
-      console.log('更新完毕')
-    })
-    onBeforeUnmount(()=>{
-      console.log('卸载之前')
-    })
-    onUnmounted(()=>{
-      console.log('卸载完毕')
-    })
-  </script>
-  ```
+// 第一种写法：仅接收
+// const props = defineProps(['list'])
+
+// 第二种写法：接收 + 限制类型
+// defineProps<{list:Persons}>()
+
+// 第三种写法：接收 + 限制类型 + 指定默认值 + 限制必要性
+let props = withDefaults(defineProps<{list?:Persons}>(),{
+	list:()=>[{id:'asdasg01',name:'小猪佩奇',age:18}]
+})
+console.log(props)
+</script>
+```
+
+### 13、生命周期
+
+#### （1）概念：
+
+`Vue` 组件实例在创建时要经历一系列的初始化步骤，在此过程中 `Vue` 会在合适的时机，调用特定的函数，从而让开发者有机会在特定阶段运行自己的代码，这些特定的函数统称为：生命周期钩子
+
+#### （2）规律：
+
+生命周期整体分为四个阶段，分别是：**创建、挂载、更新、销毁**，每个阶段都有两个钩子，一前一后
+
+#### （3）`Vue2` 的生命周期
+
+- 创建阶段：`beforeCreate`、`created`
+- 挂载阶段：`beforeMount`、`mounted`
+- 更新阶段：`beforeUpdate`、`updated`
+- 销毁阶段：`beforeDestroy`、`destroyed`
+
+#### （4）`Vue3` 的生命周期
+
+- 创建阶段：`setup`
+- 挂载阶段：`onBeforeMount`、`onMounted`
+- 更新阶段：`onBeforeUpdate`、`onUpdated`
+- 卸载阶段：`onBeforeUnmount`、`onUnmounted`
+
+#### （6）常用的钩子：
+
+- `onMounted`（挂载完毕）
+- `onUpdated`（更新完毕）
+- `onBeforeUnmount`（卸载之前）
+
+示例代码：
+
+```vue
+<template>
+  <div class="person">
+    <h2>当前求和为：{{ sum }}</h2>
+    <button @click="changeSum">点我sum+1</button>
+  </div>
+</template>
+
+<!-- vue3写法 -->
+<script lang="ts" setup name="Person">
+  import { 
+    ref, 
+    onBeforeMount, 
+    onMounted, 
+    onBeforeUpdate, 
+    onUpdated, 
+    onBeforeUnmount, 
+    onUnmounted 
+  } from 'vue'
+
+  // 数据
+  let sum = ref(0)
+  // 方法
+  function changeSum() {
+    sum.value += 1
+  }
+  console.log('setup')
+  // 生命周期钩子
+  onBeforeMount(()=>{
+    console.log('挂载之前')
+  })
+  onMounted(()=>{
+    console.log('挂载完毕')
+  })
+  onBeforeUpdate(()=>{
+    console.log('更新之前')
+  })
+  onUpdated(()=>{
+    console.log('更新完毕')
+  })
+  onBeforeUnmount(()=>{
+    console.log('卸载之前')
+  })
+  onUnmounted(()=>{
+    console.log('卸载完毕')
+  })
+</script>
+```
 
 #### 3.14. 【自定义hook】
 
