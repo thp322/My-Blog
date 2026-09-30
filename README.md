@@ -24,7 +24,7 @@
   <a href="https://harperlog.cn/"><img src="public/images/preview.png" alt="预览图" width="800"></a>
 </p>
 
-基于 [Astro](https://astro.build) 的个人博客，使用 TypeScript + Tailwind CSS v4。
+基于 [Astro](https://astro.build) 的个人博客，使用 TypeScript + Tailwind CSS v4
 
 ## 技术栈
 

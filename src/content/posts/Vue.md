@@ -1169,14 +1169,14 @@ console.log(props)
 
 生命周期整体分为四个阶段，分别是：**创建、挂载、更新、销毁**，每个阶段都有两个钩子，一前一后
 
-#### （3）`Vue2` 的生命周期
+#### （3）Vue2 的生命周期
 
 - 创建阶段：`beforeCreate`、`created`
 - 挂载阶段：`beforeMount`、`mounted`
 - 更新阶段：`beforeUpdate`、`updated`
 - 销毁阶段：`beforeDestroy`、`destroyed`
 
-#### （4）`Vue3` 的生命周期
+#### （4）Vue3 的生命周期
 
 - 创建阶段：`setup`
 - 挂载阶段：`onBeforeMount`、`onMounted`
