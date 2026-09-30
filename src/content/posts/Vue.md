@@ -297,7 +297,7 @@ createApp(App).mount('#app')
 
 #### （2）setup 的返回值
 
-- 若返回一个**对象**：则对象中的属性、方法等，在模板中均可以直接使用**（重点关注）**
+- 若返回一个**对象**：则对象中的属性、方法等，在模板中均可以直接使用（重点关注）
 
 - 若返回一个**函数**：则可以自定义渲染内容，代码如下：
 
@@ -590,30 +590,10 @@ function changeCarPrice() {
 2. 若需要一个响应式对象，层级不深，`ref`、`reactive` 都可以
 3. 若需要一个响应式对象，且层级较深，推荐使用 `reactive`
 
+#### 7、toRefs 与 toRef
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#### 3.7. 【toRefs 与 toRef】
-
-- 作用：将一个响应式对象中的每一个属性，转换为`ref`对象。
-- 备注：`toRefs`与`toRef`功能一致，但`toRefs`可以批量转换。
+- 作用：将一个响应式对象中的每一个属性，转换为 `ref` 对象
+- 备注：`toRefs `与 `toRef `功能一致，但 `toRefs` 可以批量转换
 - 语法如下：
 
 ```vue
@@ -631,16 +611,14 @@ function changeCarPrice() {
 <script lang="ts" setup name="Person">
   import {ref,reactive,toRefs,toRef} from 'vue'
 
-  // 数据
   let person = reactive({name:'张三', age:18, gender:'男'})
 	
   // 通过toRefs将person对象中的n个属性批量取出，且依然保持响应式的能力
   let {name,gender} =  toRefs(person)
-	
+  
   // 通过toRef将person对象中的gender属性取出，且依然保持响应式的能力
   let age = toRef(person,'age')
 
-  // 方法
   function changeName(){
     name.value += '~'
   }
@@ -653,11 +631,11 @@ function changeCarPrice() {
 </script>
 ```
 
-#### 3.8. 【computed】
+#### 8、computed
 
-作用：根据已有数据计算出新数据（和`Vue2`中的`computed`作用一致）。
+作用：根据已有数据计算出新数据
 
-<img src="C:/Users/pc/Desktop/Vue/尚硅谷Vue3教程/资料/images/computed.gif" style="zoom:20%;" />  
+![1](/images/Vue/1.gif)  
 
 ```vue
 <template>
@@ -675,13 +653,12 @@ function changeCarPrice() {
   let firstName = ref('zhang')
   let lastName = ref('san')
 
-  // 计算属性——只读取，不修改
+  // 计算属性 —— 只读取，不修改(本质是修改了 firstName 和 lastName，引起了 fullName 的变化)
   /* let fullName = computed(()=>{
     return firstName.value + '-' + lastName.value
   }) */
 
-
-  // 计算属性——既读取又修改
+  // 计算属性 —— 既读取又修改
   let fullName = computed({
     // 读取
     get(){
@@ -689,7 +666,7 @@ function changeCarPrice() {
     },
     // 修改
     set(val){
-      console.log('有人修改了fullName',val)
+      console.log('有人修改了 fullName',val)
       firstName.value = val.split('-')[0]
       lastName.value = val.split('-')[1]
     }
@@ -701,21 +678,36 @@ function changeCarPrice() {
 </script>
 ```
 
-#### 3.9.【watch】
+其中：
 
-- 作用：监视数据的变化（和`Vue2`中的`watch`作用一致）
-- 特点：`Vue3`中的`watch`只能监视以下**四种数据**：
+- `v-bind` 是单向绑定，即只能由数据流向页面，不能由页面流回数据，可简写为：
 
-> 1. `ref`定义的数据。
-> 2. `reactive`定义的数据。
-> 3. 函数返回一个值（`getter`函数）。
-> 4. 一个包含上述内容的数组。
+  ```html
+  姓：<input type="text" :value="firstName">
+  ```
 
-我们在`Vue3`中使用`watch`的时候，通常会遇到以下几种情况：
+- `v-model` 是双向绑定
 
-#### * 情况一
+- `方法`没有缓存
 
-监视`ref`定义的【基本类型】数据：直接写数据名即可，监视的是其`value`值的改变。
+- `属性计算`有缓存
+
+### 9、watch
+
+- 作用：监视数据的变化
+- 特点：`Vue3` 中的 `watch` 只能监视以下**四种数据**：
+  - `ref` 定义的数据
+  - `reactive` 定义的数据
+  - 函数返回一个值（`getter` 函数）
+  - 一个包含上述内容的数组
+
+我们在 `Vue3` 中使用 `watch` 的时候，通常会遇到以下几种情况：
+
+#### （1）情况一
+
+监视 `ref` 定义的基本类型数据：
+
+直接写数据名即可，监视的是其 `value` 值的改变
 
 ```vue
 <template>
@@ -728,9 +720,9 @@ function changeCarPrice() {
 
 <script lang="ts" setup name="Person">
   import {ref,watch} from 'vue'
-  // 数据
+
   let sum = ref(0)
-  // 方法
+
   function changeSum(){
     sum.value += 1
   }
@@ -744,15 +736,11 @@ function changeCarPrice() {
 </script>
 ```
 
-#### * 情况二
+#### （2）情况二
 
-监视`ref`定义的【对象类型】数据：直接写数据名，监视的是对象的【地址值】，若想监视对象内部的数据，要手动开启深度监视。
+监视 `ref` 定义的`对象类型`数据：
 
-> 注意：
->
-> * 若修改的是`ref`定义的对象中的属性，`newValue` 和 `oldValue` 都是新值，因为它们是同一个对象。
->
-> * 若修改整个`ref`定义的对象，`newValue` 是新值， `oldValue` 是旧值，因为不是同一个对象了。
+直接写数据名，监视的是对象的`地址值`，若想监视对象内部的数据，要手动开启深度监视
 
 ```vue
 <template>
@@ -768,12 +756,12 @@ function changeCarPrice() {
 
 <script lang="ts" setup name="Person">
   import {ref,watch} from 'vue'
-  // 数据
+
   let person = ref({
     name:'张三',
     age:18
   })
-  // 方法
+
   function changeName(){
     person.value.name += '~'
   }
@@ -785,9 +773,9 @@ function changeCarPrice() {
   }
   /* 
     监视，情况一：监视【ref】定义的【对象类型】数据，监视的是对象的地址值，若想监视对象内部属性的变化，需要手动开启深度监视
-    watch的第一个参数是：被监视的数据
-    watch的第二个参数是：监视的回调
-    watch的第三个参数是：配置对象（deep、immediate等等.....） 
+    watch 的第一个参数是：被监视的数据
+    watch 的第二个参数是：监视的回调
+    watch 的第三个参数是：配置对象（deep、immediate 等等.....） 
   */
   watch(person,(newValue,oldValue)=>{
     console.log('person变化了',newValue,oldValue)
@@ -796,9 +784,14 @@ function changeCarPrice() {
 </script>
 ```
 
-#### *  情况三
+> 注意：
+>
+> * 若修改的是 `ref` 定义的对象中的属性，`newValue` 和 `oldValue` 都是新值，因为它们是同一个对象
+> * 若修改整个 `ref` 定义的对象，`newValue` 是新值， `oldValue` 是旧值，因为不是同一个对象了
 
-监视`reactive`定义的【对象类型】数据，且默认开启了深度监视。
+#### （3）情况三
+
+监视 `reactive` 定义的`对象类型`数据，且默认开启了深度监视
 
 ```vue
 <template>
