@@ -1766,7 +1766,7 @@ console.log(router.replace)
 
 ### 1、准备一个效果
 
-<img src="C:/Users/pc/Desktop/Vue/尚硅谷Vue3教程/资料/images/pinia_example.gif" alt="pinia_example" style="zoom:30%;border:3px solid" /> 
+![2](/images/Vue/2.gif)
 
 ### 2、搭建 pinia 环境
 
@@ -1792,7 +1792,7 @@ app.mount('#app')
 
 此时开发者工具中已经有了`pinia`选项
 
-<img src="https://cdn.nlark.com/yuque/0/2023/png/35780599/1684309952481-c67f67f9-d1a3-4d69-8bd6-2b381e003f31.png" style="zoom:80%;border:1px solid black;border-radius:10px" />
+![7](/images/Vue/7.png)
 
 ### 3、存储+读取数据
 
@@ -2057,7 +2057,7 @@ export const useTalkStore = defineStore('talk',()=>{
 
 **常见搭配形式：**
 
-<img src="C:/Users/pc/Desktop/Vue/尚硅谷Vue3教程/资料/images/image-20231119185900990.png" alt="image-20231119185900990" style="zoom:60%;" /> 
+ ![8](/images/Vue/8.png)
 
 ### 1、props
 
