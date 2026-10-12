@@ -63,21 +63,53 @@ $$
 
 ### 1、幂等场景
 
-- 前端重复提交
+#### （1）前端重复提交
 
-  ![2](/images/Idempotency/2.png)
+![2](/images/Idempotency/2.png)
 
-- 消息重复消费
+#### （2）消息重复消费
 
-- 任务重复执行
+![5](/images/Idempotency/5.png)
+
+当消费者出现异常后，默认策略是消息会不断 requeue（重新入队）到队列，再重新发送给消费者，然后再次异常，再次 requeue，无限循环，导致 mq 的消息处理飙升，带来不必要的压力
+
+我们可以利用 Spring 的 retry 机制，在消费者出现异常时利用本地重试，而不是无限制的 requeue 到 mq 队列
+
+```
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        prefetch: 1
+        retry:
+          enabled: true # 开启消费者失败重试
+          initial-interval: 1000 # 初始的失败等待时长为1秒
+          multiplier: 1 # 下次失败的等待时长倍数，下次等待时长 = multiplier * last-interval
+          max-attempts: 3 # 最大重试次数
+          stateless: true # true无状态；false有状态。如果业务中包含事务，这里改为false
+```
+
+#### （3）任务重复执行
 
 
 
+### 2、幂等解决方案
 
+#### （1）token 机制 —— 前端重复提交
 
+![3](/images/Idempotency/3.png)
 
+![4](/images/Idempotency/4.png)
 
+#### （2）分布式锁 —— 消息重复消费
 
+加锁成功返回 ok，java 代码被封装后返回 true 
+
+如果同一个 key 加锁后过期时间还没到，返回： nil
+
+可以借助 ttl key 查看过期时间
+
+![6](/images/Idempotency/6.png)
 
 
 
