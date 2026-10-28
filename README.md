@@ -1,4 +1,4 @@
-0<h1 align="center">Harper’s Blog</h1>
+<h1 align="center">Harper’s Blog</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?style=flat&logo=react&logoColor=white" alt="React 18">
